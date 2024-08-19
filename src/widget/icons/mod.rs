@@ -1,5 +1,6 @@
 pub mod set;
 
+use std::cell::RefMut;
 use std::collections::HashMap;
 use std::hash::Hash;
 
@@ -124,13 +125,13 @@ impl IconsManager {
         }
     }
 
-    fn get_preferred_icons(&self, widget: &Widget) -> Option<IconSet> {
+    fn get_preferred_icons(&self, ui_scale: f32) -> Option<IconSet> {
         let mut icon_sets_keys = self.sets.keys().collect::<Vec<_>>();
         icon_sets_keys.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
         let preferred_scale = icon_sets_keys
             .iter()
-            .rposition(|&&icon_scale| widget.ui_scale >= icon_scale as f32)
+            .rposition(|&&icon_scale| ui_scale >= icon_scale as f32)
             .map_or(1, |index| index + 1) as u32;
 
         if let Some(icon_set) = self.sets.get(&preferred_scale) {
@@ -151,7 +152,7 @@ impl IconsManager {
         }
     }
 
-    pub fn build_icons(&mut self, widget: &Widget, atlas: &mut FontAtlasMut<'_, App>) {
+    pub fn load_icon_sets(&mut self, ui_scale: f32) -> Option<IconSet> {
         self.sets = HashMap::new();
         self.icons = HashMap::new();
         self.icons_preferred_scale = 1;
@@ -160,20 +161,17 @@ impl IconsManager {
         self.load_icon_set(2, include_bytes!("icons@2x.png")).ok();
         self.load_icon_set(3, include_bytes!("icons@3x.png")).ok();
 
-        if let Some(icons_set) = &self.get_preferred_icons(widget) {
-            self.icons_preferred_scale = icons_set.scale;
-            icons_set.clone().load_icons(&mut self.icons, atlas);
+        self.get_preferred_icons(ui_scale)
+    }
 
-            info!(
-                "Loaded {} icons from set at {}x",
-                icons_set.get_num_total_icons(),
-                icons_set.scale
-            );
-        } else {
-            warn!(
-                "No suitable icons set found for UI scale {}",
-                widget.ui_scale
-            );
-        }
+    pub fn build_icons(&mut self, icons_set: IconSet, atlas: &mut FontAtlasMut<'_, App>) {
+        self.icons_preferred_scale = icons_set.scale;
+        icons_set.clone().load_icons(&mut self.icons, atlas);
+
+        info!(
+            "Loaded {} icons from set at {}x",
+            icons_set.get_num_total_icons(),
+            icons_set.scale
+        );
     }
 }

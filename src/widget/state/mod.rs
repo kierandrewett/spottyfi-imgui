@@ -5,8 +5,9 @@ use super::theme::UITheme;
 
 pub mod developer;
 pub mod panes;
+pub mod preferences;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct WidgetState {
     pub current_theme: UITheme,
 

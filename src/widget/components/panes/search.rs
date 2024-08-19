@@ -1,10 +1,19 @@
 use crate::{
     constants::UI_ROUTE_SEARCH,
-    create_pane,
-    widget::{components::ComponentContext, icons::set::UI_ICON_SEARCH},
+    create_pane, dummy,
+    widget::{
+        components::{
+            card::{self, CardDetails},
+            ComponentContext,
+        },
+        icons::set::UI_ICON_SEARCH,
+    },
 };
 use chrono::{offset::Local, Timelike};
-use easy_imgui::{Color, ColorId, ImGuiID, InputTextFlags, TableColumnFlags, TableFlags};
+use easy_imgui::{
+    Color, ColorId, FocusedFlags, ImGuiID, InputTextFlags, MouseButton, TableColumnFlags,
+    TableFlags,
+};
 use tracing::info;
 
 pub fn build(context: &mut ComponentContext) {
@@ -33,15 +42,12 @@ pub fn build(context: &mut ComponentContext) {
                     ),
                     || {
                         let field_max_width = 700.0;
-                        let field_fill_width = context.ui.get_window_width() < (field_max_width + 80.0);
+                        let field_fill_width =
+                            context.ui.get_window_width() < (field_max_width + 80.0);
 
-                        if context.ui.button("set search value") {
-                            info!("done");
-                            context.widget.state.panes.search.search_value = "hello".to_string();
-                            info!("done {}", context.widget.state.panes.search.search_value);
-                        }
-
-                        context.ui.table_config("Search Field", if field_fill_width { 1 } else { 2 })
+                        context
+                            .ui
+                            .table_config("Search Field", if field_fill_width { 1 } else { 2 })
                             .flags(TableFlags::None)
                             .with(|| {
                                 context.ui.table_setup_column(
@@ -70,12 +76,20 @@ pub fn build(context: &mut ComponentContext) {
                                 context.ui.table_next_column();
 
                                 let input_start_x = context.ui.get_cursor_pos_x();
-                                context.ui.input_text_hint_config(
-                                    "##SearchField",
-                                    "Search artists, songs or albums",
-                                    &mut context.widget.state.panes.search.search_value,
-                                )
-                                .build();
+
+                                context
+                                    .ui
+                                    .input_text_hint_config(
+                                        "##SearchField",
+                                        "Search artists, songs or albums",
+                                        &mut context.widget.state.panes.search.search_value,
+                                    )
+                                    .flags(InputTextFlags::EscapeClearsAll)
+                                    .build();
+                                if context.ui.is_window_appearing() {
+                                    context.ui.set_keyboard_focus_here(-1);
+                                }
+
                                 let input_height = context.ui.get_item_rect_size().y;
                                 context.ui.same_line();
                                 context.ui.set_cursor_pos_x(input_start_x + input_icon_size);
@@ -97,23 +111,69 @@ pub fn build(context: &mut ComponentContext) {
                     },
                 );
 
-                context.ui.dummy(vec2(0.0, context.ui.style().FramePadding.y));
+                dummy!(context);
 
-                context.ui.with_push(font_h3, || {
-                    context.ui.text("Songs");
-                });
-                
-                context.ui.with_push(font_h3, || {
-                    context.ui.text("Artists");
-                });
-                
-                context.ui.with_push(font_h3, || {
-                    context.ui.text("Albums");
-                });
-                
-                context.ui.with_push(font_h3, || {
-                    context.ui.text("Playlists");
-                });
+                if context
+                    .widget
+                    .state
+                    .panes
+                    .search
+                    .search_value
+                    .trim()
+                    .is_empty()
+                {
+                    context.ui.with_push(font_h3, || {
+                        context.ui.text("Recent searches");
+                        dummy!(context);
+
+                        context
+                            .ui
+                            .table_config("Card Grid", 8)
+                            .flags(TableFlags::Borders)
+                            .with(|| {
+                                for i in 0..8 {
+                                    context.ui.table_setup_column(
+                                        format!("Card {i}"),
+                                        TableColumnFlags::WidthStretch,
+                                        -1.0,
+                                        ImGuiID::default(),
+                                    );
+                                }
+
+                                for _ in 0..8 {
+                                    context.ui.table_next_column();
+                                    card::build(
+                                        context,
+                                        CardDetails {
+                                            title: "All Out 80s",
+                                            subtitle: "By Spotify",
+                                            image: context.widget.glyph_album_art,
+                                        },
+                                    );
+                                }
+                            });
+                    });
+                } else {
+                    context.ui.with_push(font_h3, || {
+                        context.ui.text("Songs");
+                        dummy!(context);
+                    });
+
+                    context.ui.with_push(font_h3, || {
+                        context.ui.text("Artists");
+                        dummy!(context);
+                    });
+
+                    context.ui.with_push(font_h3, || {
+                        context.ui.text("Albums");
+                        dummy!(context);
+                    });
+
+                    context.ui.with_push(font_h3, || {
+                        context.ui.text("Playlists");
+                        dummy!(context);
+                    });
+                }
             },
         )
     });

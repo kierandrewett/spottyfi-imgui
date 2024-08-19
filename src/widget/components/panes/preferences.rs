@@ -1,10 +1,12 @@
+use std::{borrow::BorrowMut, sync::Arc};
+
 use easy_imgui::{
-    vec2, Color, ColorId, Cond, ImGuiID, StyleValue, StyleVar, TableColumnFlags, TableFlags, Ui,
-    Window, WindowFlags,
+    vec2, Color, ColorId, Cond, ImGuiID, InputTextFlags, StyleValue, StyleVar, TableColumnFlags, TableFlags, Ui, Window, WindowFlags
 };
-use tracing::info;
+use tracing::{error, info};
 
 use crate::{
+    api::{SpotifyAPI, SpotifyAPIBusyFlags, SpotifyAPICredentials},
     constants::UI_ROUTE_PREFERENCES,
     create_pane,
     event::AppEvent,
@@ -39,7 +41,7 @@ macro_rules! gen_pref_section {
 }
 
 pub fn build(mut context: &mut ComponentContext) {
-    let mut open = context.widget.state.panes.preferences_visible;
+    let mut open = context.widget.state.panes.preferences.visible;
 
     create_pane!(context.ui, context.widget, UI_ROUTE_PREFERENCES, open, {
         let window_width = context.ui.get_window_width();
@@ -53,7 +55,9 @@ pub fn build(mut context: &mut ComponentContext) {
             true
         };
 
-        context.ui.table_config("Preferences", if include_gutters { 3 } else { 1 })
+        context
+            .ui
+            .table_config("Preferences", if include_gutters { 3 } else { 1 })
             .flags(TableFlags::None)
             .with(|| {
                 if include_gutters {
@@ -93,6 +97,116 @@ pub fn build(mut context: &mut ComponentContext) {
 
                 context.ui.dummy(vec2(0.0, 10.0));
 
+                let is_authorised = context.api.lock().unwrap().is_authorised();
+
+                let last_error_message = context
+                    .api
+                    .lock()
+                    .unwrap()
+                    .session
+                    .as_ref()
+                    .and_then(|r| r.as_ref().err())
+                    .map(|e| format!("Failed to authenticate with Spotify: {:?}", e));
+
+                let is_logging_in = context
+                    .api
+                    .lock()
+                    .unwrap()
+                    .busy_flags
+                    .contains(SpotifyAPIBusyFlags::BusyLoggingIn);
+
+                gen_pref_section!(
+                    context.ui,
+                    context.widget,
+                    "Account",
+                    Some("Manage the account used for playback and user information."),
+                    {
+                        context.ui.with_disabled(is_logging_in, || {
+                            if is_authorised {
+                                context.ui.text("Logged in as Kieran (kieran@dothq.org)");
+
+                                if context.ui.button("Logout") {
+                                    info!("Do logout");
+                                }
+                            } else {
+                                context.ui.text("Email");
+                                context
+                                    .ui
+                                    .input_text_config(
+                                        "##Email",
+                                        &mut context
+                                            .widget
+                                            .state
+                                            .panes
+                                            .preferences
+                                            .credentials_email,
+                                    )
+                                    .build();
+
+                                context.ui.text("Password");
+                                context
+                                    .ui
+                                    .input_text_config(
+                                        "##Password",
+                                        &mut context
+                                            .widget
+                                            .state
+                                            .panes
+                                            .preferences
+                                            .credentials_password,
+                                    )
+                                    .flags(InputTextFlags::Password)
+                                    .build();
+
+                                if let Some(error) = last_error_message {
+                                    context.ui.with_push((ColorId::Text, Color::RED), || {
+                                        context.ui.text(&error);
+                                    });
+                                }
+
+                                if context.ui.button("Login") {
+                                    let api_arc = Arc::clone(&context.api);
+
+                                    api_arc.lock().unwrap().session = None;
+                                    api_arc
+                                        .lock()
+                                        .unwrap()
+                                        .busy_flags
+                                        .set(SpotifyAPIBusyFlags::BusyLoggingIn, true);
+
+                                    let credentials = SpotifyAPICredentials {
+                                        username: context
+                                            .widget
+                                            .state
+                                            .panes
+                                            .preferences
+                                            .credentials_email
+                                            .clone(),
+                                        password: context
+                                            .widget
+                                            .state
+                                            .panes
+                                            .preferences
+                                            .credentials_password
+                                            .clone(),
+                                    };
+
+                                    tokio::task::spawn(async move {
+                                        let token = SpotifyAPI::try_login(credentials).await;
+
+                                        api_arc
+                                            .lock()
+                                            .unwrap()
+                                            .busy_flags
+                                            .remove(SpotifyAPIBusyFlags::BusyLoggingIn);
+                                        api_arc.lock().unwrap().session = Some(token);
+                                    });
+                                }
+                            }
+                        });
+                    }
+                );
+
                 gen_pref_section!(
                     context.ui,
                     context.widget,
@@ -101,27 +215,33 @@ pub fn build(mut context: &mut ComponentContext) {
                     {
                         let theme = context.widget.get_theme();
 
-                        if context.ui
+                        if context
+                            .ui
                             .radio_button_config("System", theme == UITheme::System)
                             .build()
                         {
-                            context.event_loop
+                            context
+                                .event_loop
                                 .send_event(AppEvent::SetTheme(UITheme::System))
                                 .ok();
                         }
-                        if context.ui
+                        if context
+                            .ui
                             .radio_button_config("Light", theme == UITheme::Light)
                             .build()
                         {
-                            context.event_loop
+                            context
+                                .event_loop
                                 .send_event(AppEvent::SetTheme(UITheme::Light))
                                 .ok();
                         }
-                        if context.ui
+                        if context
+                            .ui
                             .radio_button_config("Dark", theme == UITheme::Dark)
                             .build()
                         {
-                            context.event_loop
+                            context
+                                .event_loop
                                 .send_event(AppEvent::SetTheme(UITheme::Dark))
                                 .ok();
                         }

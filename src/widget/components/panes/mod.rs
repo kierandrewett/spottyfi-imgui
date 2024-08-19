@@ -30,21 +30,31 @@ macro_rules! create_pane {
     };
 }
 
+#[macro_export]
+macro_rules! dummy {
+    ($ctx: expr) => {
+        $ctx.ui.dummy(vec2(0.0, $ctx.ui.style().FramePadding.y));
+    };
+}
+
 pub fn build(context: &mut ComponentContext) {
-    let is_prefs_visible = context.widget.state.panes.preferences_visible;
+    let is_prefs_visible = context.widget.state.panes.preferences.visible;
     let is_home_visible = context.widget.state.panes.home_visible;
     let is_search_visible = context.widget.state.panes.search.visible;
 
-    if is_prefs_visible {
+    let is_authorised = context.api.lock().unwrap().is_authorised();
+
+    if is_prefs_visible || !is_authorised {
         preferences::build(context);
     }
 
-    if is_home_visible {
-        home::build(context);
-    }
+    if is_authorised {
+        if is_home_visible {
+            home::build(context);
+        }
 
-    if is_search_visible {
-        search::build(context);
+        if is_search_visible {
+            search::build(context);
+        }
     }
 }
-

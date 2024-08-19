@@ -1,3 +1,5 @@
+use std::cell::{RefCell, RefMut};
+
 use easy_imgui::{vec2, Color, ColorId, Pushable, Style, StyleValue, StyleVar, Ui};
 
 use crate::{
@@ -6,12 +8,12 @@ use crate::{
         UI_LIGHT_CHROME_BG_COLOR, UI_LIGHT_WINDOW_BG_COLOR,
     },
     utils::{color_alpha, color_darken, color_light_dark, color_lighten},
-    App,
+    App, WidgetRc,
 };
 
 use super::{theme::UITheme, Widget};
 
-pub fn push_style<R>(widget: &Widget, ui: &Ui<App>, cb: impl FnOnce() -> R) {
+pub fn push_style<R>(widget: &WidgetRc, ui: &Ui<App>, cb: impl FnOnce() -> R) {
     let font_size = ui.get_font_size();
 
     let style = (
@@ -31,17 +33,18 @@ pub fn push_style<R>(widget: &Widget, ui: &Ui<App>, cb: impl FnOnce() -> R) {
         ),
     );
 
-    let chrome_bg_color = match widget.state.current_theme {
+    let chrome_bg_color = match widget.borrow().state.current_theme {
         UITheme::Dark => UI_DARK_CHROME_BG_COLOR,
         _ => UI_LIGHT_CHROME_BG_COLOR,
     };
 
-    let window_bg_color = match widget.state.current_theme {
+    let window_bg_color = match widget.borrow().state.current_theme {
         UITheme::Dark => UI_DARK_WINDOW_BG_COLOR,
         _ => UI_LIGHT_WINDOW_BG_COLOR,
     };
 
-    let docking_empty_bg = color_light_dark(widget.state.current_theme, window_bg_color, 0.25);
+    let docking_empty_bg =
+        color_light_dark(widget.borrow().state.current_theme, window_bg_color, 0.25);
 
     let separator = ui.style().color_alpha(ColorId::Text, 0.125);
     let separator_hover = ui.style().color_alpha(ColorId::Text, 0.25);
@@ -54,11 +57,11 @@ pub fn push_style<R>(widget: &Widget, ui: &Ui<App>, cb: impl FnOnce() -> R) {
         ),
         (
             ColorId::TitleBg,
-            color_light_dark(widget.state.current_theme, window_bg_color, 0.9),
+            color_light_dark(widget.borrow().state.current_theme, window_bg_color, 0.9),
         ),
         (
             ColorId::TitleBgActive,
-            color_light_dark(widget.state.current_theme, window_bg_color, 0.2),
+            color_light_dark(widget.borrow().state.current_theme, window_bg_color, 0.2),
         ),
         (
             (ColorId::HeaderActive, color_alpha(UI_ACCENT_COLOR, 0.5)),
@@ -74,7 +77,11 @@ pub fn push_style<R>(widget: &Widget, ui: &Ui<App>, cb: impl FnOnce() -> R) {
                 (
                     (
                         ColorId::TabDimmedSelected,
-                        color_light_dark(widget.state.current_theme, window_bg_color, 0.25),
+                        color_light_dark(
+                            widget.borrow().state.current_theme,
+                            window_bg_color,
+                            0.25,
+                        ),
                     ),
                     (ColorId::TabSelectedOverline, UI_ACCENT_COLOR),
                     (

@@ -1,15 +1,11 @@
 use std::{
-    collections::HashMap,
-    fmt::Error,
-    fs::{create_dir_all, exists, File, OpenOptions},
-    io::{read_to_string, BufReader, Read, Write},
-    path::{Path, PathBuf},
+    collections::HashMap, default, fmt::Error, fs::{create_dir_all, exists, File, OpenOptions}, io::{read_to_string, BufReader, Read, Write}, path::{Path, PathBuf}
 };
 
 use directories::ProjectDirs;
 use easy_imgui::IntoCStr;
+use merge_struct::merge;
 use serde::{Deserialize, Serialize};
-use serde_merge::omerge;
 use toml::to_string;
 use tracing::{error, info, warn};
 
@@ -20,18 +16,36 @@ use super::{
     theme::UITheme,
 };
 
-#[derive(Serialize, Deserialize, Default, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Default, Clone, Debug)]
 pub struct Preferences {
     pub zoom_level: Option<f32>,
+    pub window_state: Option<PreferencesWindowState>,
+
     pub theme: Option<UITheme>,
 
+    pub credentials: Option<PreferencesCredentials>,
     pub player_bar: Option<PreferencesPlayerBar>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Default, Debug)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug)]
 pub struct PreferencesPlayerBar {
     pub area: Option<super::components::player::PlayerArea>,
     pub position: Option<super::components::player::PlayerPosition>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Default, Debug)]
+pub struct PreferencesWindowState {
+    pub x: Option<u32>,
+    pub y: Option<u32>,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub maximized: Option<bool>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Default, Debug)]
+pub struct PreferencesCredentials {
+    pub email: Option<String>,
+    pub password: Option<String>,
 }
 
 #[derive(Clone, Default)]
@@ -48,14 +62,15 @@ impl PreferencesManager {
             zoom_level: Some(1.0),
             theme: Some(UITheme::System),
 
+            window_state: None,
+            credentials: None,
+
             player_bar: Some(PreferencesPlayerBar {
                 position: Some(PlayerPosition::Bottom),
                 area: Some(PlayerArea::Outside),
 
                 ..Default::default()
             }),
-
-            ..Default::default()
         }
     }
 
@@ -201,8 +216,8 @@ impl PreferencesManager {
         };
 
         self.data = match &self.user_prefs {
-            Some(user_prefs) => match omerge(self.default_prefs(), user_prefs) {
-                Ok(prefs) => prefs,
+            Some(user_prefs) => match merge(&self.data.clone().unwrap_or(self.default_prefs()), user_prefs) {
+                Ok(prefs) => Some(prefs),
                 Err(err) => {
                     error!(
                         "Failed to merge default preferences with user preferences file: {:#?}",
@@ -234,7 +249,7 @@ impl PreferencesManager {
                     .open(&prefs_path.clone())
                 {
                     Ok(mut handle) => {
-                        match self.serialize_preferences(prefs) {
+                        match self.serialize_preferences(prefs.clone()) {
                             Ok(parsed_opt) => {
                                 match parsed_opt {
                                     Some(parsed) => {
@@ -245,7 +260,7 @@ impl PreferencesManager {
                                                 // Re-read the prefs
                                                 self.read_preferences();
 
-                                                Some(prefs)
+                                                Some(prefs.clone())
                                             }
                                             Err(err) => {
                                                 error!(
@@ -298,18 +313,24 @@ impl PreferencesManager {
     }
 
     pub fn get(&self) -> Option<Preferences> {
-        self.data
+        self.data.clone()
     }
 
     pub fn set(&mut self, new_prefs: Preferences) -> Option<Preferences> {
         self.read_preferences();
 
-        match omerge(self.data, new_prefs) {
+        let merged_prefs = merge(
+            &self.data.clone().unwrap_or(self.default_prefs()),
+            &new_prefs.clone()
+        );
+
+        match merged_prefs {
             Ok(merged_prefs) => self.write_preferences(merged_prefs),
             Err(err) => {
                 error!(
                     "Failed to merge current preferences with new preferences {:#?}: {:#?}",
-                    new_prefs, err
+                    new_prefs.clone(),
+                    err
                 );
 
                 None

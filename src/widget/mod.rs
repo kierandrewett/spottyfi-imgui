@@ -1,4 +1,14 @@
-use std::{collections::HashSet, ffi::CString, thread, time::Duration, vec};
+use std::{
+    borrow::{Borrow, BorrowMut},
+    cell::RefCell,
+    collections::HashSet,
+    ffi::CString,
+    rc::Rc,
+    sync::{Arc, Mutex},
+    thread,
+    time::Duration,
+    vec,
+};
 
 use components::{
     modals::{ModalManager, ModalType},
@@ -7,13 +17,16 @@ use components::{
 };
 use dark_light::Mode;
 use easy_imgui::{
-    easy_imgui_sys::{ImGui_SetWindowFocus, ImGui_SetWindowFocus1},
+    easy_imgui_sys::{
+        ImGui_SetFocusID, ImGui_SetKeyboardFocusHere, ImGui_SetWindowFocus, ImGui_SetWindowFocus1,
+    },
     mint::Vector2,
     vec2, Color, ColorId, Cond, CustomRectIndex, DockNodeFlags, FontAtlasMut, FontId, FontInfo,
     ImGuiID, Image, ImageButton, IntoCStr, Key, KeyChord, KeyMod, StyleValue, StyleVar, Ui,
 };
 use easy_imgui_window::{
     easy_imgui as imgui,
+    glutin::error,
     winit::{event_loop::EventLoopProxy, window::Icon},
 };
 use flex::FlexEngine;
@@ -21,6 +34,7 @@ use font::FontFamily;
 use icons::{IconOffset, IconsManager};
 use image::GenericImage;
 use image::{load_from_memory, GenericImageView};
+use librespot::discovery::Credentials;
 use num::clamp;
 use preferences::{Preferences, PreferencesManager};
 use state::WidgetState;
@@ -28,6 +42,7 @@ use theme::UITheme;
 use tracing::{debug, error, info, warn};
 
 use crate::{
+    api::SpotifyAPI,
     commands::AppCommand,
     constants::{
         self, UI_ALBUM_ART_SIZE, UI_DARK_CHROME_BG_COLOR, UI_DEFAULT_SCALE, UI_ICONS_BASE_SIZE,
@@ -50,7 +65,7 @@ pub mod state;
 pub mod style;
 pub mod theme;
 
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub struct Widget {
     pub ui_scale: f32,
 
@@ -78,6 +93,8 @@ pub struct Widget {
     pub state: WidgetState,
 
     viewport_dockspace: ImGuiID,
+
+    pub ready_for_window_events: bool
 }
 
 impl Widget {
@@ -103,7 +120,11 @@ impl Widget {
         }
     }
 
-    pub fn init_window_state(&mut self, event_loop: &EventLoopProxy<AppEvent>) {
+    pub fn init_window_state(
+        &mut self,
+        event_loop: &EventLoopProxy<AppEvent>,
+        api: Arc<Mutex<SpotifyAPI>>,
+    ) {
         let zoom_level = self
             .preferences
             .get()
@@ -114,6 +135,18 @@ impl Widget {
 
         // Home should be visible on start-up
         self.state.panes.home_visible = true;
+
+        event_loop.send_event(AppEvent::SetInitialWindowState).ok();
+    }
+
+    pub fn load_icons(&mut self, atlas: &mut FontAtlasMut<'_, App>) {
+        let icons_set = self.icons.load_icon_sets(self.ui_scale);
+
+        if let Some(icons_set) = icons_set {
+            self.icons.build_icons(icons_set, atlas);
+        } else {
+            warn!("No suitable icons set found for UI scale {}", self.ui_scale);
+        }
     }
 
     pub fn build_custom_atlas(&mut self, atlas: &mut FontAtlasMut<'_, App>) {
@@ -160,7 +193,7 @@ impl Widget {
             None => error!("Failed to load semibold font!"),
         };
 
-        self.icons.build_icons(&mut self.clone(), atlas);
+        self.load_icons(atlas);
 
         let album_art = load_from_memory(include_bytes!("assets/album_art.webp")).expect("failed");
 
@@ -182,14 +215,29 @@ impl Widget {
         );
     }
 
-    pub fn paint_ui(&mut self, event_loop: &EventLoopProxy<AppEvent>, ui: &imgui::Ui<App>) {
+    pub fn paint_ui(
+        &mut self,
+        event_loop: &EventLoopProxy<AppEvent>,
+        ui: &imgui::Ui<App>,
+        api: Arc<Mutex<SpotifyAPI>>,
+    ) {
         let mut context = ComponentContext {
             widget: self,
             event_loop,
             ui,
+            api,
         };
 
-        ui.dock_space_over_viewport(1, DockNodeFlags::None);
+        let is_authorised = context.api.lock().unwrap().is_authorised();
+
+        ui.dock_space_over_viewport(
+            1,
+            if is_authorised {
+                DockNodeFlags::None
+            } else {
+                DockNodeFlags::NoUndocking | DockNodeFlags::AutoHideTabBar
+            },
+        );
 
         ui.with_push(((StyleVar::WindowBorderSize, StyleValue::F32(0.0))), || {
             ui.with_push(
@@ -201,23 +249,26 @@ impl Widget {
                     },
                 ),
                 || {
-                    let player_area = context.widget
-                        .preferences
-                        .get()
-                        .and_then(|p| p.player_bar)
-                        .and_then(|p| p.area)
-                        .unwrap();
+                    if is_authorised {
+                        let player_area = context
+                            .widget
+                            .preferences
+                            .get()
+                            .and_then(|p| p.player_bar)
+                            .and_then(|p| p.area)
+                            .unwrap();
 
-                    components::menubar::build(&mut context);
+                        components::menubar::build(&mut context);
 
-                    if player_area == PlayerArea::Outside {
-                        components::player::build(&mut context);
-                    }
+                        if player_area == PlayerArea::Outside {
+                            components::player::build(&mut context);
+                        }
 
-                    components::layout::build(&mut context);
+                        components::sidebar::build(&mut context);
 
-                    if player_area == PlayerArea::Inside {
-                        components::player::build(&mut context);
+                        if player_area == PlayerArea::Inside {
+                            components::player::build(&mut context);
+                        }
                     }
                 },
             );
@@ -231,11 +282,11 @@ impl Widget {
 
         ui.show_demo_window(Some(&mut true));
 
-        context.widget.handle_keyboard_shortcuts(event_loop, ui);
+        if is_authorised {
+            context.widget.handle_keyboard_shortcuts(event_loop, ui);
+        }
 
         event_loop.send_event(AppEvent::Painted).ok();
-
-        info!("{:#?}", context.widget.state.panes.search.search_value);
     }
 
     fn handle_keyboard_shortcuts(
@@ -410,7 +461,7 @@ impl Widget {
             UI_ROUTE_DEFAULT => self.state.panes.home_visible = true,
             UI_ROUTE_SEARCH => self.state.panes.search.visible = true,
 
-            UI_ROUTE_PREFERENCES => self.state.panes.preferences_visible = true,
+            UI_ROUTE_PREFERENCES => self.state.panes.preferences.visible = true,
             _ => warn!("No application route matching '{}'", route),
         }
 

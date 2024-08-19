@@ -60,7 +60,10 @@ fn build_track_info(context: &mut ComponentContext) {
             context.ui.with_push(
                 (
                     context.widget.font_small,
-                    (ColorId::Text, context.ui.style().color_alpha(ColorId::Text, 0.7)),
+                    (
+                        ColorId::Text,
+                        context.ui.style().color_alpha(ColorId::Text, 0.7),
+                    ),
                 ),
                 || {
                     context.ui.text("XTC");
@@ -72,7 +75,9 @@ fn build_track_info(context: &mut ComponentContext) {
     context.ui.table_next_column();
 
     context.ui.indent(24.0 * context.widget.ui_scale);
-    context.ui.set_cursor_pos_y((UI_PLAYER_BAR_HEIGHT * context.widget.ui_scale) / 2.0 - context.ui.get_item_rect_size().y);
+    context.ui.set_cursor_pos_y(
+        (UI_PLAYER_BAR_HEIGHT * context.widget.ui_scale) / 2.0 - context.ui.get_item_rect_size().y,
+    );
     context.widget.create_icon_button(
         context.ui,
         UI_ICON_HEART,
@@ -88,7 +93,9 @@ fn build_track_info(context: &mut ComponentContext) {
 fn build_media_controls(context: &mut ComponentContext) {
     context.ui.table_next_column();
 
-    context.ui.set_cursor_pos_y((context.ui.get_cursor_pos_y() + 16.0) * context.widget.ui_scale);
+    context
+        .ui
+        .set_cursor_pos_y((context.ui.get_cursor_pos_y() + 16.0) * context.widget.ui_scale);
 
     context.widget.create_icon_button(
         context.ui,
@@ -139,7 +146,9 @@ fn build_media_controls(context: &mut ComponentContext) {
     );
     context.ui.same_line();
 
-    context.ui.set_cursor_pos_y((context.ui.get_cursor_pos_y() + 2.0) * context.widget.ui_scale);
+    context
+        .ui
+        .set_cursor_pos_y((context.ui.get_cursor_pos_y() + 2.0) * context.widget.ui_scale);
     context.widget.create_icon_button(
         context.ui,
         UI_ICON_REPEAT,
@@ -166,15 +175,22 @@ pub fn build(context: &mut ComponentContext) {
         (
             (
                 StyleVar::WindowPadding,
-                StyleValue::Vec2(vec2(16.0 * context.widget.ui_scale, 0.0 * context.widget.ui_scale)),
+                StyleValue::Vec2(vec2(
+                    16.0 * context.widget.ui_scale,
+                    0.0 * context.widget.ui_scale,
+                )),
             ),
             (
                 StyleVar::ItemSpacing,
-                StyleValue::Vec2(vec2(16.0 * context.widget.ui_scale, 4.0 * context.widget.ui_scale)),
+                StyleValue::Vec2(vec2(
+                    16.0 * context.widget.ui_scale,
+                    4.0 * context.widget.ui_scale,
+                )),
             ),
         ),
         || {
-            let player_position = context.widget
+            let player_position = context
+                .widget
                 .preferences
                 .get()
                 .and_then(|p| p.player_bar)
@@ -195,12 +211,18 @@ pub fn build(context: &mut ComponentContext) {
                 UI_PLAYER_BAR_HEIGHT * context.widget.ui_scale,
             );
 
-            context.ui.window_draw_list()
-                .add_line(context.ui.get_cursor_pos(), context.ui.display_size(), Color::RED, 2.0);
+            context.ui.window_draw_list().add_line(
+                context.ui.get_cursor_pos(),
+                context.ui.display_size(),
+                Color::RED,
+                2.0,
+            );
 
             let viewport_size = context.ui.get_main_viewport().size();
 
-            context.ui.table_config("player_layout", 6)
+            context
+                .ui
+                .table_config("player_layout", 6)
                 .flags(TableFlags::None)
                 .with(|| {
                     context.ui.table_setup_column(

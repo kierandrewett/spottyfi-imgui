@@ -73,7 +73,9 @@ pub fn build(context: &ComponentContext) {
     let album_art_height = UI_SIDEBAR_WIDTH * context.widget.ui_scale;
     let album_art_bottom_padding = 1.0;
 
-    context.ui.set_next_window_dock_id(context.widget.viewport_dockspace + 1, Cond::Appearing);
+    context
+        .ui
+        .set_next_window_dock_id(context.widget.viewport_dockspace + 1, Cond::Appearing);
 
     context.ui.with_push(
         (
@@ -107,10 +109,14 @@ pub fn build(context: &ComponentContext) {
             );
 
             context.ui.set_next_window_dock_id(10, Cond::Once);
-            context.ui.window_config("Sidebar")
+            context
+                .ui
+                .window_config("Sidebar")
                 .flags(WindowFlags::AlwaysVerticalScrollbar)
                 .with(|| {
-                    context.ui.tree_node_config("Main")
+                    context
+                        .ui
+                        .tree_node_config("Main")
                         .flags(
                             TreeNodeFlags::DefaultOpen
                                 | TreeNodeFlags::SpanFullWidth
@@ -118,12 +124,18 @@ pub fn build(context: &ComponentContext) {
                                 | TreeNodeFlags::NoAutoOpenOnLog,
                         )
                         .with(|| {
-                            build_sidebar_item!(context.ui, context.widget, "Home", icons::set::UI_ICON_HOME, {
-                                context.widget.send_command(
-                                    context.event_loop,
-                                    AppCommand::Navigate(UI_ROUTE_DEFAULT),
-                                );
-                            });
+                            build_sidebar_item!(
+                                context.ui,
+                                context.widget,
+                                "Home",
+                                icons::set::UI_ICON_HOME,
+                                {
+                                    context.widget.send_command(
+                                        context.event_loop,
+                                        AppCommand::Navigate(UI_ROUTE_DEFAULT),
+                                    );
+                                }
+                            );
                             build_sidebar_item!(
                                 context.ui,
                                 context.widget,
@@ -159,7 +171,9 @@ pub fn build(context: &ComponentContext) {
                             );
                         });
 
-                    context.ui.tree_node_config("Your Library")
+                    context
+                        .ui
+                        .tree_node_config("Your Library")
                         .flags(
                             TreeNodeFlags::DefaultOpen
                                 | TreeNodeFlags::SpanFullWidth
@@ -203,7 +217,9 @@ pub fn build(context: &ComponentContext) {
                             );
                         });
 
-                    context.ui.tree_node_config("Playlists")
+                    context
+                        .ui
+                        .tree_node_config("Playlists")
                         .flags(
                             TreeNodeFlags::DefaultOpen
                                 | TreeNodeFlags::SpanFullWidth
@@ -222,46 +238,55 @@ pub fn build(context: &ComponentContext) {
                         });
                 });
 
-            context.ui.with_push((StyleVar::WindowBorderSize, StyleValue::F32(0.0)), || {
-                context.ui.dock_space(
-                    11,
-                    vec2(
-                        album_art_height,
-                        album_art_height - album_art_bottom_padding,
-                    ),
-                    DockNodeFlags::AutoHideTabBar | DockNodeFlags::NoDockingSplit,
-                );
+            context
+                .ui
+                .with_push((StyleVar::WindowBorderSize, StyleValue::F32(0.0)), || {
+                    context.ui.dock_space(
+                        11,
+                        vec2(
+                            album_art_height,
+                            album_art_height - album_art_bottom_padding,
+                        ),
+                        DockNodeFlags::AutoHideTabBar | DockNodeFlags::NoDockingSplit,
+                    );
 
-                context.ui.set_next_window_dock_id(11, Cond::Once);
-                context.ui.set_next_window_size_constraints_callback(
-                    vec2(
-                        album_art_height,
-                        album_art_height + album_art_bottom_padding,
-                    ),
-                    vec2(10000.0, 10000.0),
-                    |mut data| {
-                        let min = data.desired_size().x.min(data.desired_size().y);
+                    context.ui.set_next_window_dock_id(11, Cond::Once);
+                    context.ui.set_next_window_size_constraints_callback(
+                        vec2(
+                            album_art_height,
+                            album_art_height + album_art_bottom_padding,
+                        ),
+                        vec2(10000.0, 10000.0),
+                        |mut data| {
+                            let min = data.desired_size().x.min(data.desired_size().y);
 
-                        data.set_desired_size(vec2(min, min));
-                    },
-                );
+                            data.set_desired_size(vec2(min, min));
+                        },
+                    );
 
-                context.ui.window_config("Album Art")
-                    .flags(
-                        WindowFlags::NoCollapse
-                            | WindowFlags::NoScrollbar
-                            | WindowFlags::NoScrollWithMouse
-                            | WindowFlags::NoTitleBar,
-                    )
-                    .with(|| {
-                        let display_size = context.ui.get_content_region_avail();
-                        let album_art_scale =
-                            display_size.x.min(display_size.y) / UI_ALBUM_ART_SIZE;
+                    context
+                        .ui
+                        .window_config("Album Art")
+                        .flags(
+                            WindowFlags::NoCollapse
+                                | WindowFlags::NoScrollbar
+                                | WindowFlags::NoScrollWithMouse
+                                | WindowFlags::NoTitleBar,
+                        )
+                        .with(|| {
+                            let display_size = context.ui.get_content_region_avail();
+                            let album_art_scale =
+                                display_size.x.min(display_size.y) / UI_ALBUM_ART_SIZE;
 
-                        context.ui.image_with_custom_rect_config(context.widget.glyph_album_art, album_art_scale)
-                            .build();
-                    });
-            });
+                            context
+                                .ui
+                                .image_with_custom_rect_config(
+                                    context.widget.glyph_album_art,
+                                    album_art_scale,
+                                )
+                                .build();
+                        });
+                });
 
             imgui_additions::sidebar::end_main_viewport_sidebar();
         },
