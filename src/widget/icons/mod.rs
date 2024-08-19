@@ -1,12 +1,10 @@
 pub mod set;
 
-use std::cell::RefMut;
 use std::collections::HashMap;
 use std::hash::Hash;
 
 use easy_imgui::CustomRectIndex;
 use easy_imgui::FontAtlasMut;
-use easy_imgui::Ui;
 
 use image::DynamicImage;
 use image::GenericImage;
@@ -20,7 +18,6 @@ use tracing::warn;
 use crate::constants::UI_ICONS_GAP_SIZE;
 use crate::{constants::UI_ICONS_BASE_SIZE, App};
 
-use super::Widget;
 
 #[derive(Eq, Hash, PartialEq, Clone, Debug)]
 pub struct IconOffset {

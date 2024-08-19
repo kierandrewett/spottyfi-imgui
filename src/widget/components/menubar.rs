@@ -1,15 +1,12 @@
-use std::ffi::CString;
 
 use easy_imgui::{
-    vec2, ColorId, ImGuiID, StyleValue, StyleVar, TableColumnFlags, TableFlags, TableRowFlags,
+    vec2, ColorId, ImGuiID, TableColumnFlags,
 };
-use tracing::info;
 
 use crate::{
     commands::AppCommand,
     constants::UI_ROUTE_PREFERENCES,
-    widget::icons::set::{UI_ICON_DOWNLOAD, UI_ICON_USER},
-    App,
+    widget::icons::set::UI_ICON_USER,
 };
 
 use super::ComponentContext;
@@ -201,12 +198,11 @@ pub fn build(context: &mut ComponentContext) {
                         #[cfg(debug_assertions)]
                         {
                             context.ui.menu_config("Developer").with(|| {
-                                if context
+                                context
                                     .ui
                                     .menu_item_config("Demo window")
                                     .selected(context.widget.state.developer.show_demo_window)
-                                    .build()
-                                {}
+                                    .build();
                                 context.ui.separator();
                                 if context.ui.menu_item_config("About").build() {
                                     context

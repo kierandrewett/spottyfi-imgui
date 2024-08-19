@@ -1,13 +1,6 @@
 use std::{
-    borrow::{Borrow, BorrowMut},
-    cell::RefCell,
-    collections::HashSet,
     ffi::CString,
-    rc::Rc,
     sync::{Arc, Mutex},
-    thread,
-    time::Duration,
-    vec,
 };
 
 use components::{
@@ -15,26 +8,21 @@ use components::{
     player::PlayerArea,
     ComponentContext,
 };
-use dark_light::Mode;
 use easy_imgui::{
-    easy_imgui_sys::{
-        ImGui_SetFocusID, ImGui_SetKeyboardFocusHere, ImGui_SetWindowFocus, ImGui_SetWindowFocus1,
-    },
+    easy_imgui_sys::ImGui_SetWindowFocus1,
     mint::Vector2,
-    vec2, Color, ColorId, Cond, CustomRectIndex, DockNodeFlags, FontAtlasMut, FontId, FontInfo,
-    ImGuiID, Image, ImageButton, IntoCStr, Key, KeyChord, KeyMod, StyleValue, StyleVar, Ui,
+    vec2, Color, ColorId, CustomRectIndex, DockNodeFlags, FontAtlasMut, FontId,
+    ImGuiID, Image, ImageButton, Key, KeyChord, KeyMod, StyleValue, StyleVar, Ui,
 };
 use easy_imgui_window::{
     easy_imgui as imgui,
-    glutin::error,
-    winit::{event_loop::EventLoopProxy, window::Icon},
+    winit::event_loop::EventLoopProxy,
 };
 use flex::FlexEngine;
 use font::FontFamily;
 use icons::{IconOffset, IconsManager};
 use image::GenericImage;
 use image::{load_from_memory, GenericImageView};
-use librespot::discovery::Credentials;
 use num::clamp;
 use preferences::{Preferences, PreferencesManager};
 use state::WidgetState;
@@ -50,7 +38,6 @@ use crate::{
         UI_ROUTE_PREFERENCES, UI_ROUTE_SEARCH,
     },
     event::AppEvent,
-    utils::color_alpha,
     App,
 };
 
@@ -239,7 +226,7 @@ impl Widget {
             },
         );
 
-        ui.with_push(((StyleVar::WindowBorderSize, StyleValue::F32(0.0))), || {
+        ui.with_push((StyleVar::WindowBorderSize, StyleValue::F32(0.0)), || {
             ui.with_push(
                 (
                     ColorId::WindowBg,
@@ -363,8 +350,8 @@ impl Widget {
         let icon_image = self.icons.get_icon(icon_offset.clone());
 
         let icon_scale =
-            (size as f32 / UI_ICONS_BASE_SIZE as f32 / self.icons.icons_preferred_scale as f32)
-                * self.ui_scale as f32;
+            (size / UI_ICONS_BASE_SIZE as f32 / self.icons.icons_preferred_scale as f32)
+                * self.ui_scale;
 
         debug!(
             "Rendering icon {},{} at scale {}",
@@ -373,10 +360,10 @@ impl Widget {
             icon_scale
         );
 
-        return self
+        self
             .create_image(ui, icon_image, icon_scale)
             .tint_col(color)
-            .build();
+            .build()
     }
 
     pub fn create_icon_button(
@@ -393,8 +380,8 @@ impl Widget {
         let icon_image = self.icons.get_icon(icon_offset.clone());
 
         let icon_scale =
-            (size as f32 / UI_ICONS_BASE_SIZE as f32 / self.icons.icons_preferred_scale as f32)
-                * self.ui_scale as f32;
+            (size / UI_ICONS_BASE_SIZE as f32 / self.icons.icons_preferred_scale as f32)
+                * self.ui_scale;
 
         debug!(
             "Rendering icon {},{} at scale {}",

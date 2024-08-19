@@ -1,25 +1,15 @@
 use easy_imgui::{
-    easy_imgui_sys::{
-        ImGuiDir, ImGui_BeginDisabled, ImGui_DockBuilderAddNode, ImGui_DockBuilderSplitNode,
-        ImGui_EndDisabled,
-    },
-    vec2, Color, ColorId, Cond, DockNodeFlags, ImGuiID, MouseButton, StyleValue, StyleVar,
-    TableColumnFlags, TableFlags, TableRowFlags, TreeNodeFlags, Ui, WindowFlags,
+    vec2, ColorId, Cond, DockNodeFlags, MouseButton, StyleValue, StyleVar, TreeNodeFlags, WindowFlags,
 };
-use tracing::info;
 
 use crate::{
     commands::AppCommand,
     constants::{
-        UI_ALBUM_ART_SIZE, UI_APP_NAME, UI_ROUTE_DEFAULT, UI_ROUTE_SEARCH, UI_SIDEBAR_MIN_WIDTH,
+        UI_ALBUM_ART_SIZE, UI_ROUTE_DEFAULT, UI_ROUTE_SEARCH,
         UI_SIDEBAR_WIDTH,
     },
     imgui_additions::{self, sidebar::ViewportSidebarDirection},
-    widget::{
-        icons::{self, set::UI_ICON_MUSICAL_NOTE, IconOffset},
-        Widget,
-    },
-    App,
+    widget::icons::{self},
 };
 
 use super::ComponentContext;

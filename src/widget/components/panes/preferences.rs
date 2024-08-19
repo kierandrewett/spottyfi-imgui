@@ -1,18 +1,16 @@
-use std::{borrow::BorrowMut, sync::Arc};
+use std::sync::Arc;
 
 use easy_imgui::{
-    vec2, Color, ColorId, Cond, ImGuiID, InputTextFlags, StyleValue, StyleVar, TableColumnFlags, TableFlags, Ui, Window, WindowFlags
+    Color, ColorId, ImGuiID, InputTextFlags, TableColumnFlags, TableFlags
 };
-use tracing::{error, info};
+use tracing::info;
 
 use crate::{
     api::{SpotifyAPI, SpotifyAPIBusyFlags, SpotifyAPICredentials},
     constants::UI_ROUTE_PREFERENCES,
     create_pane,
     event::AppEvent,
-    utils::{color_darken, color_light_dark},
-    widget::{theme::UITheme, Widget},
-    App,
+    widget::theme::UITheme,
 };
 
 use super::ComponentContext;
@@ -40,7 +38,7 @@ macro_rules! gen_pref_section {
     };
 }
 
-pub fn build(mut context: &mut ComponentContext) {
+pub fn build(context: &mut ComponentContext) {
     let mut open = context.widget.state.panes.preferences.visible;
 
     create_pane!(context.ui, context.widget, UI_ROUTE_PREFERENCES, open, {
@@ -49,11 +47,7 @@ pub fn build(mut context: &mut ComponentContext) {
         let content_min_width = 800.0;
         let imgui_gutter_width = 50.0;
 
-        let include_gutters = if window_width < content_min_width + (imgui_gutter_width * 2.0) {
-            false
-        } else {
-            true
-        };
+        let include_gutters = window_width >= content_min_width + (imgui_gutter_width * 2.0);
 
         context
             .ui

@@ -9,12 +9,10 @@ use crate::{
         icons::set::UI_ICON_SEARCH,
     },
 };
-use chrono::{offset::Local, Timelike};
 use easy_imgui::{
-    Color, ColorId, FocusedFlags, ImGuiID, InputTextFlags, MouseButton, TableColumnFlags,
+    ColorId, ImGuiID, InputTextFlags, TableColumnFlags,
     TableFlags,
 };
-use tracing::info;
 
 pub fn build(context: &mut ComponentContext) {
     let mut open = context.widget.state.panes.search.visible;
@@ -23,7 +21,7 @@ pub fn build(context: &mut ComponentContext) {
     let input_padding = 12.0 * context.widget.ui_scale;
     let input_padding_start = input_padding + (input_icon_size * 2.0);
 
-    let font_h3 = context.widget.font_h3.clone();
+    let font_h3 = context.widget.font_h3;
 
     create_pane!(context.ui, context.widget, UI_ROUTE_SEARCH, open, {
         context.ui.with_push(

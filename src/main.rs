@@ -8,10 +8,8 @@ mod widget;
 
 use std::{
     cell::RefCell,
-    ops::{Deref, DerefMut},
     rc::Rc,
     sync::{Arc, Mutex},
-    thread,
 };
 
 use api::SpotifyAPI;
@@ -20,16 +18,13 @@ use constants::{
     SPOTIFY_ACCOUNTS_URL, UI_APP_NAME, UI_DARK_WINDOW_BG_COLOR, UI_DEFAULT_SCALE,
     UI_LIGHT_WINDOW_BG_COLOR, UI_SCALE_STEP,
 };
-use dark_light::Mode;
-use detect_desktop_environment::DesktopEnvironment;
-use easy_imgui::vec2;
 use easy_imgui_window::{
     easy_imgui as imgui,
     winit::{self, dpi::{LogicalSize, PhysicalPosition, PhysicalSize}, event_loop::EventLoopProxy, window::Window},
     AppHandler, Application, Args, EventResult, MainWindowRef,
 };
 use event::AppEvent;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use widget::{
     components::modals::ModalType,
     preferences::{Preferences, PreferencesWindowState},
@@ -131,7 +126,7 @@ impl Application for App {
                     .get()
                     .and_then(|p| p.window_state)
                 {
-                    let mut win = args.window.main_window().window();
+                    let win = args.window.main_window().window();
 
                     if let (Some(width), Some(height)) = (window_state.width, window_state.height) {
                         let _ = win.request_inner_size(PhysicalSize::new(width, height));

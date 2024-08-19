@@ -1,6 +1,5 @@
-use std::f64::MIN;
 
-use easy_imgui::{cgmath::Array, vec2, ChildFlags, Cond, WindowFlags};
+use easy_imgui::WindowFlags;
 
 use crate::{
     constants::{UI_APP_NAME, UI_APP_VERSION, UI_MODAL_PADDING},

@@ -1,5 +1,3 @@
-use crate::api::SpotifyAPIError;
-
 #[derive(Debug, Default)]
 pub struct WidgetStatePreferences {
     pub visible: bool,

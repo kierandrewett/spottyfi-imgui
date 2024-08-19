@@ -1,6 +1,5 @@
 use super::IconOffset;
 use crate::constants::{UI_ICONS_BASE_SIZE, UI_ICONS_GAP_SIZE};
-use lazy_static::lazy_static;
 
 macro_rules! get_icon_offset {
     ($index_x:expr, $index_y:expr) => {

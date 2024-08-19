@@ -1,4 +1,3 @@
-use std::{default, fmt::Error};
 
 use librespot::{
     core::{
@@ -8,7 +7,6 @@ use librespot::{
         session::{Session, SessionError},
     },
     discovery::Credentials,
-    protocol::playlist4ops::Op,
 };
 use strum_macros::Display;
 use tracing::{error, info};
@@ -78,11 +76,9 @@ impl SpotifyAPI {
             .await
             .map_err(SpotifyAPIError::SessionConnectFailure)?;
 
-        Ok(
-            keymaster::get_token(&session, SPOTIFY_CLIENT_ID, SPOTIFY_SCOPES)
+        keymaster::get_token(&session, SPOTIFY_CLIENT_ID, SPOTIFY_SCOPES)
                 .await
-                .map_err(SpotifyAPIError::TokenFailure)?,
-        )
+                .map_err(SpotifyAPIError::TokenFailure)
     }
 
     pub fn is_authorised(&self) -> bool {

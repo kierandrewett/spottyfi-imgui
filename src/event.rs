@@ -1,6 +1,4 @@
-use std::fmt;
 
-use librespot::discovery::Credentials;
 
 use crate::{commands::AppCommand, widget::theme::UITheme};
 

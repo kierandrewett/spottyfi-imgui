@@ -1,12 +1,10 @@
 use std::{
-    collections::HashMap, default, fmt::Error, fs::{create_dir_all, exists, File, OpenOptions}, io::{read_to_string, BufReader, Read, Write}, path::{Path, PathBuf}
+    fs::{create_dir_all, exists, File, OpenOptions}, io::{Read, Write}, path::PathBuf
 };
 
 use directories::ProjectDirs;
-use easy_imgui::IntoCStr;
 use merge_struct::merge;
 use serde::{Deserialize, Serialize};
-use toml::to_string;
 use tracing::{error, info, warn};
 
 use crate::constants::UI_APP_NAME;
@@ -123,8 +121,7 @@ impl PreferencesManager {
 
     pub fn get_prefs_path(&self) -> Option<PathBuf> {
         self.config_dir
-            .clone()
-            .and_then(|d| Some(d.join("preferences.toml")))
+            .clone().map(|d| d.join("preferences.toml"))
     }
 
     pub fn get_prefs_path_str(&self) -> String {
@@ -155,7 +152,7 @@ impl PreferencesManager {
             if let Some(prefs_path) = self.get_prefs_path() {
                 let prefs_path_str = &self.get_prefs_path_str();
 
-                if !exists(&prefs_path.clone()).unwrap_or(false) {
+                if !exists(prefs_path.clone()).unwrap_or(false) {
                     match File::create(prefs_path_str) {
                         Ok(mut file) => match file.write_all(b"") {
                             Ok(_) => {}
@@ -173,7 +170,7 @@ impl PreferencesManager {
 
                 let mut prefs_open_options = OpenOptions::new();
 
-                match prefs_open_options.read(true).open(&prefs_path.clone()) {
+                match prefs_open_options.read(true).open(prefs_path.clone()) {
                     Ok(mut handle) => {
                         let mut contents = String::new();
 
@@ -246,7 +243,7 @@ impl PreferencesManager {
                 match prefs_write_options
                     .write(true)
                     .truncate(true)
-                    .open(&prefs_path.clone())
+                    .open(prefs_path.clone())
                 {
                     Ok(mut handle) => {
                         match self.serialize_preferences(prefs.clone()) {

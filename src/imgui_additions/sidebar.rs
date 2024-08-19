@@ -2,7 +2,7 @@ use std::ffi::CString;
 
 use easy_imgui::{
     easy_imgui_sys::{
-        ImGuiDir, ImGui_BeginViewportSideBar, ImGui_End, ImGui_EndChild, ImGui_GetMainViewport,
+        ImGuiDir, ImGui_BeginViewportSideBar, ImGui_End, ImGui_GetMainViewport,
     },
     WindowFlags,
 };

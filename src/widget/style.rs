@@ -1,17 +1,16 @@
-use std::cell::{RefCell, RefMut};
 
-use easy_imgui::{vec2, Color, ColorId, Pushable, Style, StyleValue, StyleVar, Ui};
+use easy_imgui::{vec2, Color, ColorId, StyleValue, StyleVar, Ui};
 
 use crate::{
     constants::{
         UI_ACCENT_COLOR, UI_DARK_CHROME_BG_COLOR, UI_DARK_WINDOW_BG_COLOR,
         UI_LIGHT_CHROME_BG_COLOR, UI_LIGHT_WINDOW_BG_COLOR,
     },
-    utils::{color_alpha, color_darken, color_light_dark, color_lighten},
+    utils::{color_alpha, color_light_dark},
     App, WidgetRc,
 };
 
-use super::{theme::UITheme, Widget};
+use super::theme::UITheme;
 
 pub fn push_style<R>(widget: &WidgetRc, ui: &Ui<App>, cb: impl FnOnce() -> R) {
     let font_size = ui.get_font_size();

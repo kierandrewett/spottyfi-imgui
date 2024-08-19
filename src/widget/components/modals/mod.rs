@@ -1,10 +1,9 @@
-use std::collections::{btree_set::Iter, BTreeSet, HashSet};
+use std::collections::{btree_set::Iter, BTreeSet};
 
-use easy_imgui::{cgmath::Array, vec2, Cond, Ui};
+use easy_imgui::{vec2, Cond, Ui};
 
 use crate::{
-    constants::{UI_MODAL_AC_MIN_WINDOW_HEIGHT, UI_MODAL_AC_MIN_WINDOW_WIDTH, UI_MODAL_PADDING},
-    widget::Widget,
+    constants::{UI_MODAL_AC_MIN_WINDOW_HEIGHT, UI_MODAL_AC_MIN_WINDOW_WIDTH},
     App,
 };
 
@@ -73,7 +72,7 @@ pub fn do_centre_modal(ui: &Ui<App>, padding: &[f32; 2], mut axis: CentreModalAx
         axis = CentreModalAxis::None;
     };
 
-    let min_padding_axis_both = x_padding.min(y_padding.into());
+    let min_padding_axis_both = x_padding.min(y_padding);
 
     let real_x_padding = match axis {
         CentreModalAxis::None => 0.0,
@@ -91,8 +90,8 @@ pub fn do_centre_modal(ui: &Ui<App>, padding: &[f32; 2], mut axis: CentreModalAx
     ui.set_next_window_size_constraints(size, size);
     ui.set_next_window_size(size, Cond::Always);
 
-    let window_x = safe_divide(real_x_padding.into(), 2.0).unwrap_or(0.0);
-    let window_y = safe_divide(real_y_padding.into(), 2.0).unwrap_or(0.0);
+    let window_x = safe_divide(real_x_padding, 2.0).unwrap_or(0.0);
+    let window_y = safe_divide(real_y_padding, 2.0).unwrap_or(0.0);
     let window_pos = vec2(window_x, window_y);
 
     ui.set_next_window_pos(window_pos, Cond::Always, vec2(0.0, 0.0));

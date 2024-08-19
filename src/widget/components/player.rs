@@ -1,19 +1,8 @@
-use std::ffi::{c_int, CString};
 
 use easy_imgui::{
-    easy_imgui_sys::{
-        ImGuiCol_, ImGuiDir, ImGui_BeginViewportSideBar, ImGui_End, ImGui_GetMainViewport,
-    },
-    vec2, Color, ColorId, Cond, ImGuiID, StyleValue, StyleVar, TableColumnFlags, TableFlags,
-    TableRowFlags, WindowFlags,
+    vec2, Color, ColorId, ImGuiID, StyleValue, StyleVar, TableColumnFlags, TableFlags, WindowFlags,
 };
 use serde::{Deserialize, Serialize};
-use stretch::{
-    geometry::Size,
-    style::{Dimension, FlexDirection, Style},
-    Stretch,
-};
-use tracing::info;
 
 use crate::{
     constants::UI_PLAYER_BAR_HEIGHT,
