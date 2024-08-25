@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use super::IconOffset;
 use crate::constants::{UI_ICONS_BASE_SIZE, UI_ICONS_GAP_SIZE};
 
@@ -39,3 +41,4 @@ pub const UI_ICON_MINUS: IconOffset = get_icon_offset!(22, 0);
 pub const UI_ICON_BACK: IconOffset = get_icon_offset!(23, 0);
 pub const UI_ICON_FORWARD: IconOffset = get_icon_offset!(24, 0);
 pub const UI_ICON_DOWNLOAD: IconOffset = get_icon_offset!(25, 0);
+pub const UI_ICON_ERROR: IconOffset = get_icon_offset!(26, 0);

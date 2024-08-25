@@ -158,8 +158,6 @@ fn build_playback_options(context: &ComponentContext) {
 }
 
 pub fn build(context: &mut ComponentContext) {
-    let font_size = context.ui.get_font_size();
-
     context.ui.with_push(
         (
             (
@@ -206,8 +204,6 @@ pub fn build(context: &mut ComponentContext) {
                 Color::RED,
                 2.0,
             );
-
-            let viewport_size = context.ui.get_main_viewport().size();
 
             context
                 .ui
@@ -261,8 +257,6 @@ pub fn build(context: &mut ComponentContext) {
 
                     // Playback Options
                     build_playback_options(context);
-
-                    let column_height = context.ui.get_item_rect_size().y;
                 });
 
             imgui_additions::sidebar::end_main_viewport_sidebar();

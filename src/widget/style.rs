@@ -32,18 +32,20 @@ pub fn push_style<R>(widget: &WidgetRc, ui: &Ui<App>, cb: impl FnOnce() -> R) {
         ),
     );
 
-    let chrome_bg_color = match widget.borrow().state.current_theme {
+    let current_theme = widget.borrow().state.lock().unwrap().current_theme;
+
+    let chrome_bg_color = match current_theme {
         UITheme::Dark => UI_DARK_CHROME_BG_COLOR,
         _ => UI_LIGHT_CHROME_BG_COLOR,
     };
 
-    let window_bg_color = match widget.borrow().state.current_theme {
+    let window_bg_color = match current_theme {
         UITheme::Dark => UI_DARK_WINDOW_BG_COLOR,
         _ => UI_LIGHT_WINDOW_BG_COLOR,
     };
 
     let docking_empty_bg =
-        color_light_dark(widget.borrow().state.current_theme, window_bg_color, 0.25);
+        color_light_dark(current_theme, window_bg_color, 0.25);
 
     let separator = ui.style().color_alpha(ColorId::Text, 0.125);
     let separator_hover = ui.style().color_alpha(ColorId::Text, 0.25);
@@ -56,11 +58,11 @@ pub fn push_style<R>(widget: &WidgetRc, ui: &Ui<App>, cb: impl FnOnce() -> R) {
         ),
         (
             ColorId::TitleBg,
-            color_light_dark(widget.borrow().state.current_theme, window_bg_color, 0.9),
+            color_light_dark(current_theme, window_bg_color, 0.9),
         ),
         (
             ColorId::TitleBgActive,
-            color_light_dark(widget.borrow().state.current_theme, window_bg_color, 0.2),
+            color_light_dark(current_theme, window_bg_color, 0.2),
         ),
         (
             (ColorId::HeaderActive, color_alpha(UI_ACCENT_COLOR, 0.5)),
@@ -77,7 +79,7 @@ pub fn push_style<R>(widget: &WidgetRc, ui: &Ui<App>, cb: impl FnOnce() -> R) {
                     (
                         ColorId::TabDimmedSelected,
                         color_light_dark(
-                            widget.borrow().state.current_theme,
+                            current_theme,
                             window_bg_color,
                             0.25,
                         ),

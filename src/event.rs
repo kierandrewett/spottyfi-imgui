@@ -1,5 +1,7 @@
 
 
+use librespot::discovery::Credentials;
+
 use crate::{commands::AppCommand, widget::theme::UITheme};
 
 #[derive(PartialEq, Debug)]
@@ -10,4 +12,6 @@ pub enum AppEvent {
     InvalidateFontAtlas,
     SetInitialWindowState,
     Command(AppCommand),
+    Focus,
+    InvalidateAPIData
 }

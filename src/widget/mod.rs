@@ -1,6 +1,6 @@
 use std::{
     ffi::CString,
-    sync::{Arc, Mutex},
+    sync::{Arc},
 };
 
 use components::{
@@ -25,20 +25,16 @@ use image::GenericImage;
 use image::{load_from_memory, GenericImageView};
 use num::clamp;
 use preferences::{Preferences, PreferencesManager};
-use state::WidgetState;
 use theme::UITheme;
+use tokio::{runtime::Handle, sync::Mutex};
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    api::SpotifyAPI,
-    commands::AppCommand,
-    constants::{
+    api::SpotifyAPI, commands::AppCommand, constants::{
         self, UI_ALBUM_ART_SIZE, UI_DARK_CHROME_BG_COLOR, UI_DEFAULT_SCALE, UI_ICONS_BASE_SIZE,
         UI_LIGHT_CHROME_BG_COLOR, UI_MAX_SCALE, UI_MIN_SCALE, UI_ROUTE_DEFAULT,
         UI_ROUTE_PREFERENCES, UI_ROUTE_SEARCH,
-    },
-    event::AppEvent,
-    App,
+    }, event::AppEvent, state::State, App, SpotifyAPILock
 };
 
 mod flex;
@@ -48,7 +44,6 @@ mod fonts;
 pub mod components;
 pub mod icons;
 pub mod preferences;
-pub mod state;
 pub mod style;
 pub mod theme;
 
@@ -76,8 +71,9 @@ pub struct Widget {
     icons: IconsManager,
     flex: FlexEngine,
 
+    pub state: Arc<std::sync::Mutex<State>>,
+
     pub preferences: PreferencesManager,
-    pub state: WidgetState,
 
     viewport_dockspace: ImGuiID,
 
@@ -110,7 +106,7 @@ impl Widget {
     pub fn init_window_state(
         &mut self,
         event_loop: &EventLoopProxy<AppEvent>,
-        api: Arc<Mutex<SpotifyAPI>>,
+        api: &SpotifyAPILock
     ) {
         let zoom_level = self
             .preferences
@@ -120,10 +116,20 @@ impl Widget {
 
         self.set_ui_scale(event_loop, zoom_level);
 
-        // Home should be visible on start-up
-        self.state.panes.home_visible = true;
+        let is_authorised = api
+            .lock()
+            .unwrap()
+            .is_authorised();
+
+        if is_authorised {
+            self.state.lock().unwrap().panes.home_visible = true;
+        } else {
+            self.state.lock().unwrap().panes.preferences.visible = true;
+        }
 
         event_loop.send_event(AppEvent::SetInitialWindowState).ok();
+
+        event_loop.send_event(AppEvent::InvalidateAPIData).ok();
     }
 
     pub fn load_icons(&mut self, atlas: &mut FontAtlasMut<'_, App>) {
@@ -206,16 +212,23 @@ impl Widget {
         &mut self,
         event_loop: &EventLoopProxy<AppEvent>,
         ui: &imgui::Ui<App>,
-        api: Arc<Mutex<SpotifyAPI>>,
+        api: &SpotifyAPILock
     ) {
         let mut context = ComponentContext {
             widget: self,
             event_loop,
             ui,
-            api,
+            api
         };
 
-        let is_authorised = context.api.lock().unwrap().is_authorised();
+        info!("a");
+
+        let is_authorised = context.api
+            .lock()
+            .unwrap()
+            .is_authorised();
+
+        info!("b");
 
         ui.dock_space_over_viewport(
             1,
@@ -227,35 +240,37 @@ impl Widget {
         );
 
         ui.with_push((StyleVar::WindowBorderSize, StyleValue::F32(0.0)), || {
+            let state_arc = Arc::clone(&context.widget.state);
+
+            let current_theme = &state_arc.lock().unwrap().current_theme;
+
             ui.with_push(
                 (
                     ColorId::WindowBg,
-                    match context.widget.state.current_theme {
+                    match current_theme {
                         UITheme::Dark => UI_DARK_CHROME_BG_COLOR,
                         _ => UI_LIGHT_CHROME_BG_COLOR,
                     },
                 ),
                 || {
-                    if is_authorised {
-                        let player_area = context
-                            .widget
-                            .preferences
-                            .get()
-                            .and_then(|p| p.player_bar)
-                            .and_then(|p| p.area)
-                            .unwrap();
+                    let player_area = context
+                        .widget
+                        .preferences
+                        .get()
+                        .and_then(|p| p.player_bar)
+                        .and_then(|p| p.area)
+                        .unwrap();
 
-                        components::menubar::build(&mut context);
+                    components::menubar::build(&mut context);
 
-                        if player_area == PlayerArea::Outside {
-                            components::player::build(&mut context);
-                        }
+                    if player_area == PlayerArea::Outside {
+                        components::player::build(&mut context);
+                    }
 
-                        components::sidebar::build(&mut context);
+                    components::sidebar::build(&mut context);
 
-                        if player_area == PlayerArea::Inside {
-                            components::player::build(&mut context);
-                        }
+                    if player_area == PlayerArea::Inside {
+                        components::player::build(&mut context);
                     }
                 },
             );
@@ -269,9 +284,7 @@ impl Widget {
 
         ui.show_demo_window(Some(&mut true));
 
-        if is_authorised {
-            context.widget.handle_keyboard_shortcuts(event_loop, ui);
-        }
+        context.widget.handle_keyboard_shortcuts(event_loop, ui);
 
         event_loop.send_event(AppEvent::Painted).ok();
     }
@@ -426,7 +439,7 @@ impl Widget {
             });
         }
 
-        self.state.current_theme = theme;
+        self.state.lock().unwrap().current_theme = theme;
     }
 
     pub fn open_shell_url(&self, url: &str) -> Result<(), std::io::Error> {
@@ -445,10 +458,10 @@ impl Widget {
 
     pub fn router(&mut self, route: &'static str) {
         match route {
-            UI_ROUTE_DEFAULT => self.state.panes.home_visible = true,
-            UI_ROUTE_SEARCH => self.state.panes.search.visible = true,
+            UI_ROUTE_DEFAULT => self.state.lock().unwrap().panes.home_visible = true,
+            UI_ROUTE_SEARCH => self.state.lock().unwrap().panes.search.visible = true,
 
-            UI_ROUTE_PREFERENCES => self.state.panes.preferences.visible = true,
+            UI_ROUTE_PREFERENCES => self.state.lock().unwrap().panes.preferences.visible = true,
             _ => warn!("No application route matching '{}'", route),
         }
 

@@ -1,16 +1,14 @@
-use std::sync::Arc;
+use std::{borrow::BorrowMut, sync::{mpsc::channel, Arc}, thread};
 
 use easy_imgui::{
     Color, ColorId, ImGuiID, InputTextFlags, TableColumnFlags, TableFlags
 };
-use tracing::info;
+use librespot::core::SessionConfig;
+use tokio::runtime::Handle;
+use tracing::{error, info};
 
 use crate::{
-    api::{SpotifyAPI, SpotifyAPIBusyFlags, SpotifyAPICredentials},
-    constants::UI_ROUTE_PREFERENCES,
-    create_pane,
-    event::AppEvent,
-    widget::theme::UITheme,
+    api::{providers::oauth2::{SpotifyAPIOAuthClient, SpotifyAPIOAuthError}, SpotifyAPI, SpotifyAPIBusyFlags, SpotifyAPICredentials, SpotifyAPIError}, constants::{SPOTIFY_CLIENT_ID, UI_ROUTE_PREFERENCES}, create_pane, event::AppEvent, state, widget::theme::UITheme, App
 };
 
 use super::ComponentContext;
@@ -39,7 +37,7 @@ macro_rules! gen_pref_section {
 }
 
 pub fn build(context: &mut ComponentContext) {
-    let mut open = context.widget.state.panes.preferences.visible;
+    let mut open = context.widget.state.lock().unwrap().panes.preferences.visible;
 
     create_pane!(context.ui, context.widget, UI_ROUTE_PREFERENCES, open, {
         let window_width = context.ui.get_window_width();
@@ -91,19 +89,20 @@ pub fn build(context: &mut ComponentContext) {
 
                 context.ui.dummy(vec2(0.0, 10.0));
 
-                let is_authorised = context.api.lock().unwrap().is_authorised();
-
-                let last_error_message = context
-                    .api
+                let is_authorised = context.api
                     .lock()
                     .unwrap()
-                    .session
-                    .as_ref()
-                    .and_then(|r| r.as_ref().err())
-                    .map(|e| format!("Failed to authenticate with Spotify: {:?}", e));
+                    .is_authorised();
+                let username = "Kieran";
+                let market = "GB";
 
-                let is_logging_in = context
-                    .api
+                let last_auth_error = context.api
+                    .lock()
+                    .unwrap()
+                    .get_auth_error()
+                    .map(|e| format!("Failed to connect to Spotify: {:#?}", e));
+
+                let is_logging_in = context.api
                     .lock()
                     .unwrap()
                     .busy_flags
@@ -117,84 +116,40 @@ pub fn build(context: &mut ComponentContext) {
                     {
                         context.ui.with_disabled(is_logging_in, || {
                             if is_authorised {
-                                context.ui.text("Logged in as Kieran (kieran@dothq.org)");
+                                context.ui.text(&format!("Logged in as: {}.", username));
+                                context.ui.text(&format!("Market: {}", market));
 
-                                if context.ui.button("Logout") {
-                                    info!("Do logout");
+                                if context.ui.button("Log out") {
+                                    let mut cloned_arc = Arc::clone(context.api);
+
+                                    cloned_arc
+                                        .lock()
+                                        .unwrap()
+                                        .logout();
                                 }
                             } else {
-                                context.ui.text("Email");
-                                context
-                                    .ui
-                                    .input_text_config(
-                                        "##Email",
-                                        &mut context
-                                            .widget
-                                            .state
-                                            .panes
-                                            .preferences
-                                            .credentials_email,
-                                    )
-                                    .build();
-
-                                context.ui.text("Password");
-                                context
-                                    .ui
-                                    .input_text_config(
-                                        "##Password",
-                                        &mut context
-                                            .widget
-                                            .state
-                                            .panes
-                                            .preferences
-                                            .credentials_password,
-                                    )
-                                    .flags(InputTextFlags::Password)
-                                    .build();
-
-                                if let Some(error) = last_error_message {
+                                if let Some(error) = last_auth_error {
                                     context.ui.with_push((ColorId::Text, Color::RED), || {
                                         context.ui.text(&error);
                                     });
                                 }
 
-                                if context.ui.button("Login") {
-                                    let api_arc = Arc::clone(&context.api);
+                                if context.ui.button(if is_logging_in { "Logging in..." } else { "Login" }) {
+                                    let state_clone = Arc::clone(context.api);
 
-                                    api_arc.lock().unwrap().session = None;
-                                    api_arc
-                                        .lock()
-                                        .unwrap()
-                                        .busy_flags
-                                        .set(SpotifyAPIBusyFlags::BusyLoggingIn, true);
+                                    SpotifyAPI::login(state_clone);
 
-                                    let credentials = SpotifyAPICredentials {
-                                        username: context
-                                            .widget
-                                            .state
-                                            .panes
-                                            .preferences
-                                            .credentials_email
-                                            .clone(),
-                                        password: context
-                                            .widget
-                                            .state
-                                            .panes
-                                            .preferences
-                                            .credentials_password
-                                            .clone(),
-                                    };
+                                    // thread::spawn(move || {
+                                    //     let rt = tokio::runtime::Runtime::new().unwrap();
 
-                                    tokio::task::spawn(async move {
-                                        let token = SpotifyAPI::try_login(credentials).await;
+                                    //     rt.block_on(async move {
+                                    //         tokio::task::spawn(async move {
+                                    //             SpotifyAPI::login(state_clone).await;
+                                    //         }).await.unwrap();
+                                    //     });
+                                    // });
 
-                                        api_arc
-                                            .lock()
-                                            .unwrap()
-                                            .busy_flags
-                                            .remove(SpotifyAPIBusyFlags::BusyLoggingIn);
-                                        api_arc.lock().unwrap().session = Some(token);
-                                    });
+                                    // println!("Final state: {:?}", *context.api.lock().unwrap());
                                 }
                             }
                         });

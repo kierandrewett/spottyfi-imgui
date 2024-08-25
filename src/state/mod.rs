@@ -8,7 +8,7 @@ pub mod panes;
 pub mod preferences;
 
 #[derive(Debug, Default)]
-pub struct WidgetState {
+pub struct State {
     pub current_theme: UITheme,
 
     pub panes: WidgetStatePanes,

@@ -32,6 +32,6 @@ pub fn color_lighten(color: Color, lighten_mul: f32) -> Color {
 pub fn color_light_dark(theme: UITheme, color: Color, mul: f32) -> Color {
     match theme {
         UITheme::Dark => color_lighten(color, mul),
-        _ => color_darken(color, 1.0 - mul),
+        _ => color_darken(color, mul),
     }
 }

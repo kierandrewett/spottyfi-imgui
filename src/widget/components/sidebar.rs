@@ -53,9 +53,7 @@ macro_rules! build_sidebar_item {
 
 pub fn build(context: &ComponentContext) {
     let viewport = context.ui.get_main_viewport();
-    let viewport_outer_size = viewport.size();
     let viewport_size = viewport.work_size();
-    let viewport_pos = viewport.work_pos();
 
     let font_size = context.ui.get_font_size();
 
@@ -84,7 +82,8 @@ pub fn build(context: &ComponentContext) {
                     | WindowFlags::NoTitleBar
                     | WindowFlags::NoNav
                     | WindowFlags::NoBringToFrontOnFocus
-                    | WindowFlags::NoScrollbar,
+                    | WindowFlags::NoScrollbar
+                    | WindowFlags::NoScrollWithMouse,
                 ViewportSidebarDirection::Left,
                 sidebar_width,
             );
@@ -92,7 +91,7 @@ pub fn build(context: &ComponentContext) {
             context.ui.dock_space(
                 10,
                 vec2(
-                    viewport_size.x,
+                    sidebar_width,
                     viewport_size.y - album_art_height - album_art_bottom_padding,
                 ),
                 DockNodeFlags::AutoHideTabBar | DockNodeFlags::NoDockingSplit,

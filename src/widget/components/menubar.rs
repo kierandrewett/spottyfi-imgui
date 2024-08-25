@@ -2,6 +2,7 @@
 use easy_imgui::{
     vec2, ColorId, ImGuiID, TableColumnFlags,
 };
+use tokio::runtime::Handle;
 
 use crate::{
     commands::AppCommand,
@@ -195,23 +196,6 @@ pub fn build(context: &mut ComponentContext) {
                     context.ui.menu_config("Help").with(|| {
                         context.ui.menu_item_config("Third-party licences").build();
                         context.ui.separator();
-                        #[cfg(debug_assertions)]
-                        {
-                            context.ui.menu_config("Developer").with(|| {
-                                context
-                                    .ui
-                                    .menu_item_config("Demo window")
-                                    .selected(context.widget.state.developer.show_demo_window)
-                                    .build();
-                                context.ui.separator();
-                                if context.ui.menu_item_config("About").build() {
-                                    context
-                                        .widget
-                                        .send_command(context.event_loop, AppCommand::About);
-                                }
-                            });
-                        }
-                        context.ui.separator();
                         if context.ui.menu_item_config("About").build() {
                             context
                                 .widget
@@ -219,7 +203,10 @@ pub fn build(context: &mut ComponentContext) {
                         }
                     });
 
-                    let is_authorised = context.api.lock().unwrap().is_authorised();
+                    let is_authorised = context.api
+                        .lock()
+                        .unwrap()
+                        .is_authorised();
 
                     context.ui.table_next_column();
 
@@ -227,7 +214,7 @@ pub fn build(context: &mut ComponentContext) {
                     let menuitem_size = context.ui.get_item_rect_size();
 
                     if is_authorised {
-                        context.ui.menu_config("      Kieran").with(|| {
+                        context.ui.menu_config("      Kieran".to_string()).with(|| {
                             context
                                 .ui
                                 .menu_item_config("kieran@dothq.org")

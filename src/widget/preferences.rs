@@ -42,8 +42,8 @@ pub struct PreferencesWindowState {
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]
 pub struct PreferencesCredentials {
-    pub email: Option<String>,
-    pub password: Option<String>,
+    pub access_token: Option<String>,
+    pub refresh_token: Option<String>
 }
 
 #[derive(Clone, Default)]
@@ -228,7 +228,7 @@ impl PreferencesManager {
         };
     }
 
-    pub fn write_preferences(&mut self, prefs: Preferences) -> Option<Preferences> {
+    fn write_preferences(&mut self, prefs: Preferences) -> Option<Preferences> {
         if let Some(prefs_path) = &self.get_prefs_path() {
             let prefs_path_str = &self.get_prefs_path_str();
 

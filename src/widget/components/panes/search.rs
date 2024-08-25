@@ -1,3 +1,5 @@
+use std::{borrow::BorrowMut, sync::Arc};
+
 use crate::{
     constants::UI_ROUTE_SEARCH,
     create_pane, dummy,
@@ -15,7 +17,17 @@ use easy_imgui::{
 };
 
 pub fn build(context: &mut ComponentContext) {
-    let mut open = context.widget.state.panes.search.visible;
+    let state_arc = Arc::clone(&context.widget.state);
+
+    let mut open = state_arc.lock().unwrap().panes.search.visible;
+
+    let search_value = &context.widget.state
+        .lock()
+        .unwrap()
+        .panes
+        .search
+        .search_value
+        .clone();
 
     let input_icon_size = 16.0 * context.widget.ui_scale;
     let input_padding = 12.0 * context.widget.ui_scale;
@@ -80,7 +92,12 @@ pub fn build(context: &mut ComponentContext) {
                                     .input_text_hint_config(
                                         "##SearchField",
                                         "Search artists, songs or albums",
-                                        &mut context.widget.state.panes.search.search_value,
+                                        &mut state_arc
+                                            .lock()
+                                            .unwrap()
+                                            .panes
+                                            .search
+                                            .search_value,
                                     )
                                     .flags(InputTextFlags::EscapeClearsAll)
                                     .build();
@@ -111,15 +128,7 @@ pub fn build(context: &mut ComponentContext) {
 
                 dummy!(context);
 
-                if context
-                    .widget
-                    .state
-                    .panes
-                    .search
-                    .search_value
-                    .trim()
-                    .is_empty()
-                {
+                if search_value.trim().is_empty() {
                     context.ui.with_push(font_h3, || {
                         context.ui.text("Recent searches");
                         dummy!(context);

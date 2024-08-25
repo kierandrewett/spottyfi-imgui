@@ -1,18 +1,19 @@
+#![allow(unused)]
+
 mod api;
 mod commands;
 mod constants;
 mod event;
 mod imgui_additions;
 mod utils;
+mod state;
 mod widget;
 
 use std::{
-    cell::RefCell,
-    rc::Rc,
-    sync::{Arc, Mutex},
+    cell::{Ref, RefCell}, rc::Rc, sync::{Arc, Mutex, RwLock}, thread, time::Duration
 };
 
-use api::SpotifyAPI;
+use api::{SpotifyAPI, SpotifyAPIWrapper};
 use commands::AppCommand;
 use constants::{
     SPOTIFY_ACCOUNTS_URL, UI_APP_NAME, UI_DARK_WINDOW_BG_COLOR, UI_DEFAULT_SCALE,
@@ -21,40 +22,54 @@ use constants::{
 use easy_imgui_window::{
     easy_imgui as imgui,
     winit::{self, dpi::{LogicalSize, PhysicalPosition, PhysicalSize}, event_loop::EventLoopProxy, window::Window},
-    AppHandler, Application, Args, EventResult, MainWindowRef,
+    AppHandler, Application, Args, EventResult,
 };
 use event::AppEvent;
+use semaphore::Semaphore;
+use state::State;
 use tracing::{error, info};
 use widget::{
     components::modals::ModalType,
-    preferences::{Preferences, PreferencesWindowState},
+    preferences::{Preferences, PreferencesCredentials, PreferencesWindowState},
     theme::{self, UITheme},
     Widget,
 };
 use winit::{event::WindowEvent, event_loop::EventLoop};
 
-#[tokio::main]
-async fn main() {
+fn main() {
     tracing_subscriber::fmt().init();
 
     let event_loop = EventLoop::with_user_event().build().unwrap();
 
     let proxy = event_loop.create_proxy();
 
-    let mut main = AppHandler::<App>::new(proxy);
+    let mut main = AppHandler::<App>::new(proxy.clone());
     *main.attributes() = Window::default_attributes()
         .with_title(UI_APP_NAME)
         .with_min_inner_size(LogicalSize::new(256.0, 256.0));
+
+    thread::spawn(|| {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        rt.block_on(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(30));
+                loop {
+                    proxy.clone().send_event(AppEvent::InvalidateAPIData).ok();
+                    interval.tick().await;
+                }
+        });
+    });
 
     event_loop.run_app(&mut main).unwrap();
 }
 
 pub type WidgetRc = Rc<RefCell<Widget>>;
+pub type SpotifyAPILock = Arc<Mutex<SpotifyAPI>>;
 
-struct App {
+pub struct App {
     widget: WidgetRc,
     event_loop_proxy: EventLoopProxy<AppEvent>,
-    api: Arc<Mutex<SpotifyAPI>>,
+    api: SpotifyAPILock
 }
 
 impl Application for App {
@@ -65,13 +80,18 @@ impl Application for App {
         let mut widget = Widget::new();
         let event_loop_proxy = args.data.clone();
         let api = Arc::new(Mutex::new(SpotifyAPI::new()));
+        // let api_arc = Arc::new(api_instance);
+        // let api = Arc::new(SpotifyAPIShared {
+        //     readable_lock: RwLock::new(*Arc::clone(&api_arc).as_ref()),
+        //     writable_lock: Mutex::new(*Arc::clone(&api_arc).as_ref())
+        // });
 
-        widget.init_window_state(&event_loop_proxy, Arc::clone(&api));
+        widget.init_window_state(&event_loop_proxy, &api);
 
         App {
             widget: Rc::new(RefCell::new(widget)),
             event_loop_proxy,
-            api,
+            api
         }
     }
 
@@ -80,7 +100,6 @@ impl Application for App {
 
         // Return early if this is a paint event
         if event == AppEvent::Painted {
-            imgui.set_allow_user_scaling(true);
             imgui.nav_enable_keyboard();
 
             let app_theme = match self.widget.borrow().preferences.get().and_then(|p| p.theme) {
@@ -115,7 +134,10 @@ impl Application for App {
         match event {
             AppEvent::InvalidateFontAtlas => {
                 args.window.renderer().imgui().invalidate_font_atlas();
-            }
+            },
+            AppEvent::InvalidateAPIData => {
+
+            },
             AppEvent::SetInitialWindowState => {
                 info!("Setting initial window state...");
 
@@ -125,7 +147,7 @@ impl Application for App {
                     .preferences
                     .get()
                     .and_then(|p| p.window_state)
-                {
+            {
                     let win = args.window.main_window().window();
 
                     if let (Some(width), Some(height)) = (window_state.width, window_state.height) {
@@ -153,14 +175,26 @@ impl Application for App {
 
                     AppCommand::Navigate(route) => self.widget.borrow_mut().router(route),
 
-                    AppCommand::ZoomIn => self.widget.borrow_mut().set_ui_scale(
-                        &self.event_loop_proxy,
-                        self.widget.borrow().ui_scale + UI_SCALE_STEP,
-                    ),
-                    AppCommand::ZoomOut => self.widget.borrow_mut().set_ui_scale(
-                        &self.event_loop_proxy,
-                        self.widget.borrow().ui_scale - UI_SCALE_STEP,
-                    ),
+                    AppCommand::ZoomIn => {
+                        let mut widget_mut = self.widget.borrow_mut();
+
+                        let new_scale = widget_mut.ui_scale + UI_SCALE_STEP;
+
+                        widget_mut.set_ui_scale(
+                            &self.event_loop_proxy,
+                            new_scale,
+                        );
+                    },
+                    AppCommand::ZoomOut => {
+                        let mut widget_mut = self.widget.borrow_mut();
+
+                        let new_scale = widget_mut.ui_scale - UI_SCALE_STEP;
+
+                        widget_mut.set_ui_scale(
+                            &self.event_loop_proxy,
+                            new_scale,
+                        );
+                    },
                     AppCommand::ZoomReset => self
                         .widget
                         .borrow_mut()
@@ -185,20 +219,12 @@ impl Application for App {
         if self.widget.borrow().ready_for_window_events {
             match event {
                 WindowEvent::Moved(new_pos) => {
-                    info!("{:#?}", Preferences {
-                        window_state: Some(PreferencesWindowState {
-                            x: Some(new_pos.x as u32),
-                            y: Some(new_pos.y as u32),
-
-                            ..Default::default()
-                        }),
-                        ..Default::default()
-                    });
-
                     self.widget.borrow_mut().preferences.set(Preferences {
                         window_state: Some(PreferencesWindowState {
                             x: Some(new_pos.x as u32),
                             y: Some(new_pos.y as u32),
+
+                            maximized: Some(args.window.main_window().window().is_maximized()),
 
                             ..Default::default()
                         }),
@@ -206,15 +232,34 @@ impl Application for App {
                     });
                 },
                 WindowEvent::Resized(new_size) => {
-                    self.widget.borrow_mut().preferences.set(Preferences {
-                        window_state: Some(PreferencesWindowState {
+                    let is_maximized = args.window.main_window().window().is_maximized();
+
+                    let window_state = if is_maximized {
+                        PreferencesWindowState {
+                            maximized: Some(is_maximized),
+
+                            ..Default::default()
+                        }
+                    } else {
+                        PreferencesWindowState {
                             width: Some(new_size.width),
                             height: Some(new_size.height),
 
+                            maximized: Some(is_maximized),
+
                             ..Default::default()
-                        }),
+                        }
+                    };
+
+                    self.widget.borrow_mut().preferences.set(Preferences {
+                        window_state: Some(window_state),
                         ..Default::default()
                     });
+                },
+                WindowEvent::Focused(focused) => {
+                    if focused {
+                        self.event_loop_proxy.send_event(AppEvent::InvalidateAPIData).ok();
+                    }
                 },
                 _ => {}
             }
@@ -235,7 +280,7 @@ impl imgui::UiBuilder for App {
         widget::style::push_style(&self.widget, ui, || {
             self.widget
                 .borrow_mut()
-                .paint_ui(&self.event_loop_proxy, ui, Arc::clone(&self.api));
+                .paint_ui(&self.event_loop_proxy, ui, &self.api);
         });
     }
 }
