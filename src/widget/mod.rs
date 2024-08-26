@@ -3,6 +3,7 @@ use std::{
     sync::{Arc},
 };
 
+use chrono::Duration;
 use components::{
     modals::{ModalManager, ModalType},
     player::PlayerArea,
@@ -30,11 +31,9 @@ use tokio::{runtime::Handle, sync::Mutex};
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    api::SpotifyAPI, commands::AppCommand, constants::{
-        self, UI_ALBUM_ART_SIZE, UI_DARK_CHROME_BG_COLOR, UI_DEFAULT_SCALE, UI_ICONS_BASE_SIZE,
-        UI_LIGHT_CHROME_BG_COLOR, UI_MAX_SCALE, UI_MIN_SCALE, UI_ROUTE_DEFAULT,
-        UI_ROUTE_PREFERENCES, UI_ROUTE_SEARCH,
-    }, event::AppEvent, state::State, App, SpotifyAPILock
+    api::{SpotifyAPI, SpotifyAPIState}, commands::AppCommand, constants::{
+        self, UI_ALBUM_ART_SIZE, UI_DARK_CHROME_BG_COLOR, UI_DEFAULT_LOCALE, UI_DEFAULT_SCALE, UI_ICONS_BASE_SIZE, UI_LIGHT_CHROME_BG_COLOR, UI_MAX_SCALE, UI_MIN_SCALE, UI_ROUTE_DEFAULT, UI_ROUTE_PREFERENCES, UI_ROUTE_SEARCH
+    }, event::{AppEvent, AppFetchType}, state::State, App
 };
 
 mod flex;
@@ -46,6 +45,7 @@ pub mod icons;
 pub mod preferences;
 pub mod style;
 pub mod theme;
+pub mod actions;
 
 #[derive(Default)]
 pub struct Widget {
@@ -106,7 +106,7 @@ impl Widget {
     pub fn init_window_state(
         &mut self,
         event_loop: &EventLoopProxy<AppEvent>,
-        api: &SpotifyAPILock
+        api: Arc<SpotifyAPI>
     ) {
         let zoom_level = self
             .preferences
@@ -116,20 +116,9 @@ impl Widget {
 
         self.set_ui_scale(event_loop, zoom_level);
 
-        let is_authorised = api
-            .lock()
-            .unwrap()
-            .is_authorised();
-
-        if is_authorised {
-            self.state.lock().unwrap().panes.home_visible = true;
-        } else {
-            self.state.lock().unwrap().panes.preferences.visible = true;
-        }
-
         event_loop.send_event(AppEvent::SetInitialWindowState).ok();
 
-        event_loop.send_event(AppEvent::InvalidateAPIData).ok();
+        event_loop.send_event(AppEvent::Fetch(AppFetchType::All)).ok();
     }
 
     pub fn load_icons(&mut self, atlas: &mut FontAtlasMut<'_, App>) {
@@ -212,7 +201,7 @@ impl Widget {
         &mut self,
         event_loop: &EventLoopProxy<AppEvent>,
         ui: &imgui::Ui<App>,
-        api: &SpotifyAPILock
+        api: Arc<SpotifyAPI>
     ) {
         let mut context = ComponentContext {
             widget: self,
@@ -221,18 +210,16 @@ impl Widget {
             api
         };
 
-        info!("a");
-
-        let is_authorised = context.api
+        let current_search_value = context.widget.state
             .lock()
             .unwrap()
-            .is_authorised();
-
-        info!("b");
+            .search
+            .search_value
+            .clone();
 
         ui.dock_space_over_viewport(
             1,
-            if is_authorised {
+            if context.api.is_logged_in() {
                 DockNodeFlags::None
             } else {
                 DockNodeFlags::NoUndocking | DockNodeFlags::AutoHideTabBar
@@ -240,9 +227,9 @@ impl Widget {
         );
 
         ui.with_push((StyleVar::WindowBorderSize, StyleValue::F32(0.0)), || {
-            let state_arc = Arc::clone(&context.widget.state);
+            let current_theme = context.widget.state.lock().unwrap().current_theme;
 
-            let current_theme = &state_arc.lock().unwrap().current_theme;
+            actions::search::build(&mut context);
 
             ui.with_push(
                 (
@@ -287,6 +274,12 @@ impl Widget {
         context.widget.handle_keyboard_shortcuts(event_loop, ui);
 
         event_loop.send_event(AppEvent::Painted).ok();
+
+        context.widget.state
+            .lock()
+            .unwrap()
+            .search
+            .last_search_value = current_search_value;
     }
 
     fn handle_keyboard_shortcuts(
@@ -344,6 +337,13 @@ impl Widget {
 
     fn send_command(&self, event_loop: &EventLoopProxy<AppEvent>, command: AppCommand) {
         event_loop.send_event(AppEvent::Command(command)).ok();
+    }
+
+    pub fn locale(&self) -> String {
+        self.preferences
+            .get()
+            .and_then(|p| p.locale)
+            .unwrap_or(UI_DEFAULT_LOCALE.to_string())
     }
 
     pub fn create_image(&self, ui: &Ui<App>, texture: CustomRectIndex, scale: f32) -> Image {
@@ -458,10 +458,10 @@ impl Widget {
 
     pub fn router(&mut self, route: &'static str) {
         match route {
-            UI_ROUTE_DEFAULT => self.state.lock().unwrap().panes.home_visible = true,
-            UI_ROUTE_SEARCH => self.state.lock().unwrap().panes.search.visible = true,
+            UI_ROUTE_DEFAULT => self.state.lock().unwrap().home_visible = true,
+            UI_ROUTE_SEARCH => self.state.lock().unwrap().search.visible = true,
 
-            UI_ROUTE_PREFERENCES => self.state.lock().unwrap().panes.preferences.visible = true,
+            UI_ROUTE_PREFERENCES => self.state.lock().unwrap().preferences.visible = true,
             _ => warn!("No application route matching '{}'", route),
         }
 

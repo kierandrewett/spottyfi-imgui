@@ -7,7 +7,7 @@ use crate::{dummy, widget::icons::set::UI_ICON_ERROR};
 
 use super::ComponentContext;
 
-pub fn build<E: Display + Debug>(context: &mut ComponentContext, error: E) {
+pub fn build<E: Debug>(context: &mut ComponentContext, error: E) {
     let icon_size = context.ui.get_font_size() * 2.0;
 
     dummy!(context, 10.0);

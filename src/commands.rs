@@ -1,4 +1,4 @@
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum AppCommand {
     About,
     Quit,
@@ -8,6 +8,8 @@ pub enum AppCommand {
     ZoomReset,
 
     Navigate(&'static str),
+
+    DoSearch(String),
 
     OpenSpotifyAccount,
 }

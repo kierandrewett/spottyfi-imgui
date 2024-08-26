@@ -2,18 +2,43 @@ use easy_imgui::{
     vec2, ColorId, CustomRectIndex, ImGuiID, StyleValue, StyleVar, TableColumnFlags, TableFlags,
     TableRowFlags,
 };
+use rspotify_model::{FullTrack, SimplifiedTrack};
 
 use crate::constants::UI_ALBUM_ART_SIZE;
 
 use super::ComponentContext;
 
-pub struct CardDetails {
-    pub image: CustomRectIndex,
-    pub title: &'static str,
-    pub subtitle: &'static str,
+pub enum CardType {
+    FullTrack(FullTrack),
+    SimplifiedTrack(SimplifiedTrack)
 }
 
-pub fn build(context: &mut ComponentContext, details: CardDetails) {
+#[derive(Debug, Default)]
+pub struct CardDetails {
+    title: String,
+    subtitle: Option<String>,
+    image: Option<String>,
+    href: Option<String>
+}
+
+pub fn build(context: &mut ComponentContext, data: CardType) {
+    let details = match data {
+        CardType::FullTrack(track) => CardDetails {
+            image: track.album.images
+                .first().map(|i| i.url.clone()),
+            ..Default::default()
+        },
+        CardType::SimplifiedTrack(track) => CardDetails {
+            image: track.album
+                .and_then(|a|
+                    a.images
+                        .first()
+                        .map(|i| i.url.clone())
+                ),
+            ..Default::default()
+        }
+    };
+
     context
         .ui
         .table_config("Card", 1)
@@ -29,10 +54,12 @@ pub fn build(context: &mut ComponentContext, details: CardDetails) {
             // context.ui.table_next_row(TableRowFlags::None, 180.0);
             context.ui.table_next_column();
 
-            context
-                .widget
-                .create_image(context.ui, details.image, 180.0 / UI_ALBUM_ART_SIZE)
-                .build();
+            // let image = image::load_from_memory(reqwest::)
+
+            // context
+            //     .widget
+            //     .create_image(context.ui, data.image, 180.0 / UI_ALBUM_ART_SIZE)
+            //     .build();
 
             context.ui.table_next_row(TableRowFlags::None, 200.0);
 

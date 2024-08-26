@@ -32,14 +32,9 @@ macro_rules! create_pane {
 }
 
 pub fn build(context: &mut ComponentContext) {
-    let is_prefs_visible = context.widget.state.lock().unwrap().panes.preferences.visible;
-    let is_home_visible = context.widget.state.lock().unwrap().panes.home_visible;
-    let is_search_visible = context.widget.state.lock().unwrap().panes.search.visible;
-
-    let is_authorised = context.api
-        .lock()
-        .unwrap()
-        .is_authorised();
+    let is_prefs_visible = context.widget.state.lock().unwrap().preferences.visible;
+    let is_home_visible = context.widget.state.lock().unwrap().home_visible;
+    let is_search_visible = context.widget.state.lock().unwrap().search.visible;
 
     if is_prefs_visible {
         preferences::build(context);

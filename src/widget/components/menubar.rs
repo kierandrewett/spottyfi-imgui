@@ -5,9 +5,7 @@ use easy_imgui::{
 use tokio::runtime::Handle;
 
 use crate::{
-    commands::AppCommand,
-    constants::UI_ROUTE_PREFERENCES,
-    widget::icons::set::UI_ICON_USER,
+    api::models::user::{UserImpl as _}, commands::AppCommand, constants::UI_ROUTE_PREFERENCES, widget::icons::set::UI_ICON_USER
 };
 
 use super::ComponentContext;
@@ -203,23 +201,20 @@ pub fn build(context: &mut ComponentContext) {
                         }
                     });
 
-                    let is_authorised = context.api
-                        .lock()
-                        .unwrap()
-                        .is_authorised();
-
                     context.ui.table_next_column();
 
                     let menuitem_start_x = context.ui.get_cursor_pos_x();
                     let menuitem_size = context.ui.get_item_rect_size();
 
-                    if is_authorised {
-                        context.ui.menu_config("      Kieran".to_string()).with(|| {
-                            context
-                                .ui
-                                .menu_item_config("kieran@dothq.org")
-                                .enabled(false)
-                                .build();
+                    if let Some(profile) = context.api.state().and_then(|s| s.profile) {
+                        context.ui.menu_config(format!("      {}", profile.name())).with(|| {
+                            if let Some(email) = profile.email {
+                                context
+                                    .ui
+                                    .menu_item_config(email)
+                                    .enabled(false)
+                                    .build();
+                            }
                             context.ui.separator();
 
                             if context.ui.menu_item_config("Your Spotify Account").build() {

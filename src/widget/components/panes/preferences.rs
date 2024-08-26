@@ -1,14 +1,14 @@
-use std::{borrow::BorrowMut, sync::{mpsc::channel, Arc}, thread};
+use std::{borrow::{Borrow, BorrowMut}, sync::{mpsc::channel, Arc}, thread};
 
 use easy_imgui::{
-    Color, ColorId, ImGuiID, InputTextFlags, TableColumnFlags, TableFlags
+    Color, ColorId, ImGuiID, InputTextFlags, TableColumnFlags, TableFlags, TextureId
 };
 use librespot::core::SessionConfig;
 use tokio::runtime::Handle;
 use tracing::{error, info};
 
 use crate::{
-    api::{providers::oauth2::{SpotifyAPIOAuthClient, SpotifyAPIOAuthError}, SpotifyAPI, SpotifyAPIBusyFlags, SpotifyAPICredentials, SpotifyAPIError}, constants::{SPOTIFY_CLIENT_ID, UI_ROUTE_PREFERENCES}, create_pane, event::AppEvent, state, widget::theme::UITheme, App
+    api::models::user::{UserImpl as _}, constants::{UI_ROUTE_PREFERENCES}, create_pane, event::AppEvent, state, utils::{color_darken, color_light_dark, color_lighten, color_lighten_darken}, widget::theme::UITheme, App
 };
 
 use super::ComponentContext;
@@ -37,7 +37,7 @@ macro_rules! gen_pref_section {
 }
 
 pub fn build(context: &mut ComponentContext) {
-    let mut open = context.widget.state.lock().unwrap().panes.preferences.visible;
+    let mut open = context.widget.state.lock().unwrap().preferences.visible;
 
     create_pane!(context.ui, context.widget, UI_ROUTE_PREFERENCES, open, {
         let window_width = context.ui.get_window_width();
@@ -89,68 +89,72 @@ pub fn build(context: &mut ComponentContext) {
 
                 context.ui.dummy(vec2(0.0, 10.0));
 
-                let is_authorised = context.api
-                    .lock()
-                    .unwrap()
-                    .is_authorised();
-                let username = "Kieran";
-                let market = "GB";
-
-                let last_auth_error = context.api
-                    .lock()
-                    .unwrap()
-                    .get_auth_error()
-                    .map(|e| format!("Failed to connect to Spotify: {:#?}", e));
-
-                let is_logging_in = context.api
-                    .lock()
-                    .unwrap()
-                    .busy_flags
-                    .contains(SpotifyAPIBusyFlags::BusyLoggingIn);
-
                 gen_pref_section!(
                     context.ui,
                     context.widget,
                     "Account",
                     Some("Manage the account used for playback and user information."),
                     {
-                        context.ui.with_disabled(is_logging_in, || {
-                            if is_authorised {
-                                context.ui.text(&format!("Logged in as: {}.", username));
-                                context.ui.text(&format!("Market: {}", market));
+                        let current_theme = context.widget.state.lock().unwrap().current_theme;
+
+                        context.ui.with_disabled(context.api.is_logging_in(), || {
+                            if let Some(error) = context.api.get_state_error() {
+                                context.ui.with_push((ColorId::Text, color_lighten_darken(current_theme, Color::RED, 0.3)), || {
+                                    context.ui.text(
+                                        &format!("Failed to establish connection to Spotify: {:#?}", error)
+                                    );
+                                });
+                            }
+
+                            if let Some(profile) = context.api.state().and_then(|s| s.profile) {
+                                let reveal_email = context.widget.state.lock().unwrap().preferences.reveal_email;
+
+                                context.ui.with_push(context.widget.font_bold, || {
+                                    context.ui.text("Name");
+                                });
+                                context.ui.input_text_config("", &mut profile.name())
+                                    .flags(InputTextFlags::ReadOnly)
+                                    .build();
+
+                                context.ui.with_push(context.widget.font_bold, || {
+                                    context.ui.text("Email");
+                                });
+                                let mut email_flags = InputTextFlags::ReadOnly;
+                                email_flags.set(InputTextFlags::Password, !reveal_email);
+                                context.ui.input_text_config("", &mut profile.email_safe())
+                                    .flags(email_flags)
+                                    .build();
+                                context.ui.same_line();
+                                if context.ui.button(if reveal_email { "Hide" } else { "Show" }) {
+                                    context.widget.state.lock().unwrap()
+                                        .preferences
+                                        .reveal_email = !reveal_email;
+                                }
+
+                                context.ui.with_push(context.widget.font_bold, || {
+                                    context.ui.text("Market");
+                                });
+                                context.ui.input_text_config("", &mut profile.country_safe())
+                                    .flags(InputTextFlags::ReadOnly)
+                                    .build();
 
                                 if context.ui.button("Log out") {
-                                    let mut cloned_arc = Arc::clone(context.api);
+                                    let api_arc = Arc::clone(&context.api);
 
-                                    cloned_arc
-                                        .lock()
-                                        .unwrap()
-                                        .logout();
-                                }
-                            } else {
-                                if let Some(error) = last_auth_error {
-                                    context.ui.with_push((ColorId::Text, Color::RED), || {
-                                        context.ui.text(&error);
+                                    tokio::task::spawn(async move {
+                                        api_arc.logout().await;
                                     });
                                 }
+                            } else if context.ui.button(if context.api.is_logging_in() { "Logging in..." } else { "Login" }) {
+                                let api_arc = Arc::clone(&context.api);
+                                let event_loop_arc = Arc::new(context.event_loop.clone());
 
-                                if context.ui.button(if is_logging_in { "Logging in..." } else { "Login" }) {
-                                    let state_clone = Arc::clone(context.api);
+                                let locale = context.widget.locale();
 
-                                    SpotifyAPI::login(state_clone);
-
-                                    // thread::spawn(move || {
-                                    //     let rt = tokio::runtime::Runtime::new().unwrap();
-
-                                    //     rt.block_on(async move {
-                                    //         tokio::task::spawn(async move {
-                                    //             SpotifyAPI::login(state_clone).await;
-                                    //         }).await.unwrap();
-                                    //     });
-                                    // });
-
-                                    // println!("Final state: {:?}", *context.api.lock().unwrap());
-                                }
+                                tokio::task::spawn(async move {
+                                    api_arc.logout().await;
+                                    api_arc.login(Some(true)).await;
+                                });
                             }
                         });
                     }

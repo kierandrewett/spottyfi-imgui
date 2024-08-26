@@ -6,7 +6,7 @@ use crate::{
         UI_ACCENT_COLOR, UI_DARK_CHROME_BG_COLOR, UI_DARK_WINDOW_BG_COLOR,
         UI_LIGHT_CHROME_BG_COLOR, UI_LIGHT_WINDOW_BG_COLOR,
     },
-    utils::{color_alpha, color_light_dark},
+    utils::{color_alpha, color_lighten_darken},
     App, WidgetRc,
 };
 
@@ -45,7 +45,7 @@ pub fn push_style<R>(widget: &WidgetRc, ui: &Ui<App>, cb: impl FnOnce() -> R) {
     };
 
     let docking_empty_bg =
-        color_light_dark(current_theme, window_bg_color, 0.25);
+        color_lighten_darken(current_theme, window_bg_color, 0.25);
 
     let separator = ui.style().color_alpha(ColorId::Text, 0.125);
     let separator_hover = ui.style().color_alpha(ColorId::Text, 0.25);
@@ -58,11 +58,11 @@ pub fn push_style<R>(widget: &WidgetRc, ui: &Ui<App>, cb: impl FnOnce() -> R) {
         ),
         (
             ColorId::TitleBg,
-            color_light_dark(current_theme, window_bg_color, 0.9),
+            color_lighten_darken(current_theme, window_bg_color, 0.9),
         ),
         (
             ColorId::TitleBgActive,
-            color_light_dark(current_theme, window_bg_color, 0.2),
+            color_lighten_darken(current_theme, window_bg_color, 0.2),
         ),
         (
             (ColorId::HeaderActive, color_alpha(UI_ACCENT_COLOR, 0.5)),
@@ -78,7 +78,7 @@ pub fn push_style<R>(widget: &WidgetRc, ui: &Ui<App>, cb: impl FnOnce() -> R) {
                 (
                     (
                         ColorId::TabDimmedSelected,
-                        color_light_dark(
+                        color_lighten_darken(
                             current_theme,
                             window_bg_color,
                             0.25,

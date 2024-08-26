@@ -1,13 +1,13 @@
 use std::{
-    fs::{create_dir_all, exists, File, OpenOptions}, io::{Read, Write}, path::PathBuf
+    default, fs::{create_dir_all, exists, File, OpenOptions}, io::{Read, Write}, path::PathBuf, time::Duration
 };
 
 use directories::ProjectDirs;
 use merge_struct::merge;
 use serde::{Deserialize, Serialize};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
-use crate::constants::UI_APP_NAME;
+use crate::constants::{UI_APP_NAME, UI_DEFAULT_LOCALE};
 
 use super::{
     components::player::{PlayerArea, PlayerPosition},
@@ -17,6 +17,8 @@ use super::{
 #[derive(Serialize, Deserialize, Default, Clone, Debug)]
 pub struct Preferences {
     pub zoom_level: Option<f32>,
+    pub locale: Option<String>,
+
     pub window_state: Option<PreferencesWindowState>,
 
     pub theme: Option<UITheme>,
@@ -42,8 +44,7 @@ pub struct PreferencesWindowState {
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]
 pub struct PreferencesCredentials {
-    pub access_token: Option<String>,
-    pub refresh_token: Option<String>
+    pub secret: Option<String>,
 }
 
 #[derive(Clone, Default)]
@@ -58,6 +59,7 @@ impl PreferencesManager {
     pub fn default_prefs(&self) -> Preferences {
         Preferences {
             zoom_level: Some(1.0),
+            locale: Some(UI_DEFAULT_LOCALE.to_string()),
             theme: Some(UITheme::System),
 
             window_state: None,
@@ -232,7 +234,7 @@ impl PreferencesManager {
         if let Some(prefs_path) = &self.get_prefs_path() {
             let prefs_path_str = &self.get_prefs_path_str();
 
-            info!(
+            debug!(
                 "Writing new {:#?} to preferences file at {}",
                 prefs, prefs_path_str
             );

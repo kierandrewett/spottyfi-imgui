@@ -1,12 +1,15 @@
-#[derive(Debug)]
-pub struct SpotifyAPIData {
-    pub profile: SpotifyAPIDataProfile
+use std::sync::Arc;
+
+use rspotify_model::{Category, Page, PrivateUser, SimplifiedPlaylist};
+use super::models::{recommendations::BrowseRecommendations, user::UserImpl};
+
+#[derive(Debug, Clone)]
+pub enum SpotifyAPIDataError {
+    NotAuthenticated,
+    RequestError(),
 }
 
-#[derive(Debug)]
-pub struct SpotifyAPIDataProfile {
-    pub username: String,
-    pub display_name: Option<String>,
-    pub country: String,
-    pub email: String,
+#[derive(Debug, Clone, Default)]
+pub struct SpotifyAPIData {
+    pub profile: Option<PrivateUser>
 }

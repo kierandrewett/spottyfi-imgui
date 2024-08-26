@@ -1,30 +1,27 @@
 use std::{borrow::BorrowMut, sync::Arc};
 
 use crate::{
-    constants::UI_ROUTE_SEARCH,
-    create_pane, dummy,
-    widget::{
+    api::models::user::UserImpl, commands::AppCommand, constants::UI_ROUTE_SEARCH, create_pane, dummy, state::search::WidgetStateSearchResults, widget::{
         components::{
-            card::{self, CardDetails},
-            ComponentContext,
+            self, card::{self, CardDetails}, ComponentContext
         },
         icons::set::UI_ICON_SEARCH,
-    },
+    }
 };
 use easy_imgui::{
     ColorId, ImGuiID, InputTextFlags, TableColumnFlags,
     TableFlags,
 };
+use rspotify_model::SearchResult;
 
 pub fn build(context: &mut ComponentContext) {
     let state_arc = Arc::clone(&context.widget.state);
 
-    let mut open = state_arc.lock().unwrap().panes.search.visible;
+    let mut open = state_arc.lock().unwrap().search.visible;
 
-    let search_value = &context.widget.state
+    let search_value = &state_arc
         .lock()
         .unwrap()
-        .panes
         .search
         .search_value
         .clone();
@@ -87,7 +84,7 @@ pub fn build(context: &mut ComponentContext) {
 
                                 let input_start_x = context.ui.get_cursor_pos_x();
 
-                                context
+                                if context
                                     .ui
                                     .input_text_hint_config(
                                         "##SearchField",
@@ -95,12 +92,21 @@ pub fn build(context: &mut ComponentContext) {
                                         &mut state_arc
                                             .lock()
                                             .unwrap()
-                                            .panes
                                             .search
                                             .search_value,
                                     )
                                     .flags(InputTextFlags::EscapeClearsAll)
-                                    .build();
+                                    .build()
+                                {
+                                    let evt = AppCommand::DoSearch(state_arc
+                                        .lock()
+                                        .unwrap()
+                                        .search
+                                        .search_value.clone()
+                                    );
+
+                                    context.widget.send_command(context.event_loop, evt);
+                                }
                                 if context.ui.is_window_appearing() {
                                     context.ui.set_keyboard_focus_here(-1);
                                 }
@@ -128,58 +134,91 @@ pub fn build(context: &mut ComponentContext) {
 
                 dummy!(context);
 
-                if search_value.trim().is_empty() {
-                    context.ui.with_push(font_h3, || {
-                        context.ui.text("Recent searches");
-                        dummy!(context);
-
-                        context
-                            .ui
-                            .table_config("Card Grid", 8)
-                            .flags(TableFlags::Borders)
-                            .with(|| {
-                                for i in 0..8 {
-                                    context.ui.table_setup_column(
-                                        format!("Card {i}"),
-                                        TableColumnFlags::WidthStretch,
-                                        -1.0,
-                                        ImGuiID::default(),
-                                    );
-                                }
-
-                                for _ in 0..8 {
-                                    context.ui.table_next_column();
-                                    card::build(
-                                        context,
-                                        CardDetails {
-                                            title: "All Out 80s",
-                                            subtitle: "By Spotify",
-                                            image: context.widget.glyph_album_art,
-                                        },
-                                    );
-                                }
+                match &state_arc
+                    .lock()
+                    .unwrap()
+                    .search
+                    .search_results
+                {
+                    WidgetStateSearchResults::Fetched(Ok(results)) => {
+                        if results.is_empty() {
+                            context.ui.with_push(font_h3, || {
+                                context.ui.text("No results found.");
                             });
-                    });
-                } else {
-                    context.ui.with_push(font_h3, || {
-                        context.ui.text("Songs");
-                        dummy!(context);
-                    });
+                        } else {
+                            if let Some(tracks) = &results.tracks {
+                                context.ui.with_push(font_h3, || {
+                                    context.ui.text("Songs");
+                                    dummy!(context);
+                                });
 
-                    context.ui.with_push(font_h3, || {
-                        context.ui.text("Artists");
-                        dummy!(context);
-                    });
+                                for track in &tracks.items {
+                                    context.ui.text(&format!(
+                                        "{} by {} on {}",
+                                        track.name,
+                                        track.artists.iter()
+                                            .map(|a| a.name.clone())
+                                            .collect::<Vec<String>>()
+                                            .join(", "),
+                                        track.album.name
+                                    ));
+                                }
+                            }
+    
+                            if let Some(artists) = &results.artists {
+                                context.ui.with_push(font_h3, || {
+                                    context.ui.text("Artists");
+                                    dummy!(context);
+                                });
 
-                    context.ui.with_push(font_h3, || {
-                        context.ui.text("Albums");
-                        dummy!(context);
-                    });
+                                for artist in &artists.items {
+                                    context.ui.text(&artist.name);
+                                }
+                            }
+    
+                            if let Some(albums) = &results.albums {
+                                context.ui.with_push(font_h3, || {
+                                    context.ui.text("Albums");
+                                    dummy!(context);
+                                });
 
-                    context.ui.with_push(font_h3, || {
-                        context.ui.text("Playlists");
-                        dummy!(context);
-                    });
+                                for album in &albums.items {
+                                    context.ui.text(&format!(
+                                        "{} created by {}",
+                                        album.name,
+                                        album.artists.iter()
+                                            .map(|a| a.name.clone())
+                                            .collect::<Vec<String>>()
+                                            .join(", "),
+                                    ));
+                                }
+                            }
+    
+                            if let Some(playlists) = &results.playlists {
+                                context.ui.with_push(font_h3, || {
+                                    context.ui.text("Playlists");
+                                    dummy!(context);
+                                });
+
+                                for playlist in &playlists.items {
+                                    context.ui.text(&format!(
+                                        "{} created by {}",
+                                        playlist.name,
+                                        playlist.owner.name()
+                                    ));
+                                }
+                            }
+                        }
+                    },
+                    WidgetStateSearchResults::Fetched(Err(err)) => {
+                        components::error::build(context, Box::new(err.clone()));
+                    },
+                    WidgetStateSearchResults::None => {
+                        context.ui.with_push(font_h3, || {
+                            context.ui.text("Recent searches");
+                        });
+                    },
+                    _ => {}
                 }
             },
         )

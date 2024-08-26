@@ -13,20 +13,19 @@ use std::{
     cell::{Ref, RefCell}, rc::Rc, sync::{Arc, Mutex, RwLock}, thread, time::Duration
 };
 
-use api::{SpotifyAPI, SpotifyAPIWrapper};
+use api::{models::recommendations::{self, BrowseRecommendations}, SpotifyAPI};
 use commands::AppCommand;
 use constants::{
-    SPOTIFY_ACCOUNTS_URL, UI_APP_NAME, UI_DARK_WINDOW_BG_COLOR, UI_DEFAULT_SCALE,
-    UI_LIGHT_WINDOW_BG_COLOR, UI_SCALE_STEP,
+    UI_APP_NAME, UI_DARK_WINDOW_BG_COLOR, UI_DEFAULT_LOCALE, UI_DEFAULT_SCALE, UI_LIGHT_WINDOW_BG_COLOR, UI_SCALE_STEP
 };
 use easy_imgui_window::{
     easy_imgui as imgui,
-    winit::{self, dpi::{LogicalSize, PhysicalPosition, PhysicalSize}, event_loop::EventLoopProxy, window::Window},
+    winit::{self, dpi::{LogicalSize, PhysicalPosition, PhysicalSize}, event_loop::{self, EventLoopProxy}, window::Window},
     AppHandler, Application, Args, EventResult,
 };
-use event::AppEvent;
+use event::{AppEvent, AppFetchType};
 use semaphore::Semaphore;
-use state::State;
+use state::{search::WidgetStateSearchResults, State};
 use tracing::{error, info};
 use widget::{
     components::modals::ModalType,
@@ -36,7 +35,8 @@ use widget::{
 };
 use winit::{event::WindowEvent, event_loop::EventLoop};
 
-fn main() {
+#[tokio::main]
+async fn main() {
     tracing_subscriber::fmt().init();
 
     let event_loop = EventLoop::with_user_event().build().unwrap();
@@ -48,28 +48,23 @@ fn main() {
         .with_title(UI_APP_NAME)
         .with_min_inner_size(LogicalSize::new(256.0, 256.0));
 
-    thread::spawn(|| {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-
-        rt.block_on(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(30));
-                loop {
-                    proxy.clone().send_event(AppEvent::InvalidateAPIData).ok();
-                    interval.tick().await;
-                }
-        });
+    tokio::task::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(60));
+        loop {
+            proxy.clone().send_event(AppEvent::Fetch(AppFetchType::Volatile)).ok();
+            interval.tick().await;
+        }
     });
 
     event_loop.run_app(&mut main).unwrap();
 }
 
 pub type WidgetRc = Rc<RefCell<Widget>>;
-pub type SpotifyAPILock = Arc<Mutex<SpotifyAPI>>;
 
 pub struct App {
     widget: WidgetRc,
-    event_loop_proxy: EventLoopProxy<AppEvent>,
-    api: SpotifyAPILock
+    event_loop_proxy: Arc<EventLoopProxy<AppEvent>>,
+    api: Arc<SpotifyAPI>,
 }
 
 impl Application for App {
@@ -77,19 +72,34 @@ impl Application for App {
     type Data = EventLoopProxy<AppEvent>;
 
     fn new(args: Args<Self::Data>) -> App {
-        let mut widget = Widget::new();
-        let event_loop_proxy = args.data.clone();
-        let api = Arc::new(Mutex::new(SpotifyAPI::new()));
-        // let api_arc = Arc::new(api_instance);
-        // let api = Arc::new(SpotifyAPIShared {
-        //     readable_lock: RwLock::new(*Arc::clone(&api_arc).as_ref()),
-        //     writable_lock: Mutex::new(*Arc::clone(&api_arc).as_ref())
-        // });
+        let mut widget = Rc::new(RefCell::new(Widget::new()));
+        let event_loop_proxy = Arc::new(args.data.clone());
 
-        widget.init_window_state(&event_loop_proxy, &api);
+        let refresh_token = widget
+            .borrow()
+            .preferences
+            .get()
+            .and_then(|p| p.credentials)
+            .and_then(|c| c.secret)
+            .and_then(|c| if c.trim().is_empty() { None } else { Some(c) });
+
+        let api = Arc::new(SpotifyAPI::new(
+            Arc::clone(&event_loop_proxy),
+            refresh_token.clone()
+        ));
+
+        if let Some(token) = refresh_token.clone() {
+            info!("Attempting to login to Spotify with refresh token...");
+        } else {
+            // If we don't have a refresh token we can assume we don't have a login session at all
+            widget.borrow_mut().state.lock().unwrap().preferences.visible = true;
+        }
+
+        widget.borrow_mut()
+            .init_window_state(&event_loop_proxy, Arc::clone(&api));
 
         App {
-            widget: Rc::new(RefCell::new(widget)),
+            widget,
             event_loop_proxy,
             api
         }
@@ -131,12 +141,84 @@ impl Application for App {
             return;
         }
 
-        match event {
+        match event.clone() {
             AppEvent::InvalidateFontAtlas => {
                 args.window.renderer().imgui().invalidate_font_atlas();
             },
-            AppEvent::InvalidateAPIData => {
+            AppEvent::Login => {
+                let api_arc = Arc::clone(&self.api);
 
+                tokio::task::spawn(async move {
+                    if api_arc.is_not_authenticated() {
+                        api_arc.login(None).await;
+                    }
+                });
+            },
+            AppEvent::Fetch(r#type) => {
+                let can_fetch = self.api.is_authenticated() || self.api.is_logged_in();
+
+                if !can_fetch {
+                    return;
+                }
+
+                let all = matches!(r#type, AppFetchType::All);
+                let volatile = matches!(r#type, AppFetchType::Volatile);
+
+                if all || volatile || matches!(r#type, AppFetchType::Profile) {
+                    let api_arc = Arc::clone(&self.api);
+
+                    let locale = self.widget.borrow().locale();
+
+                    tokio::task::spawn(async move {
+                        api_arc.fetch_data_wrapper(locale).await;
+                    });
+                }
+
+                if all || matches!(r#type, AppFetchType::Recommendations) {
+                    let api_arc = Arc::clone(&self.api);
+                    let state_arc = Arc::clone(&self.widget.borrow_mut().state);
+
+                    let locale = self.widget.borrow().locale();
+
+                    tokio::task::spawn(async move {
+                        match api_arc.get_browse_recommendations(locale).await {
+                            Ok(recommendations) => {
+                                if let Ok(mut state) = state_arc.lock() {
+                                    state.recommendations = Some(recommendations);
+                                }
+                            },
+                            Err(err) => {
+                                error!("Failed to download recommendations data: {:#?}", err);
+                            }
+                        }
+                    });
+                }
+            },
+            AppEvent::FirstTimeLogin => {
+                if self.api.is_logged_in() {
+                    self.widget.borrow_mut().state.lock().unwrap().home_visible = true;
+                } else {
+                    self.widget.borrow_mut().state.lock().unwrap().preferences.visible = true;
+                }
+
+                args.window
+                    .main_window()
+                    .window()
+                    .focus_window();
+            },
+            AppEvent::StoreToken(refresh_token) => {
+                let credentials = PreferencesCredentials {
+                    secret: Some(refresh_token.unwrap_or("".to_string()))
+                };
+
+                self
+                    .widget
+                    .borrow_mut()
+                    .preferences
+                    .set(Preferences {
+                        credentials: Some(credentials),
+                        ..Default::default()
+                    });
             },
             AppEvent::SetInitialWindowState => {
                 info!("Setting initial window state...");
@@ -167,7 +249,7 @@ impl Application for App {
             }
             AppEvent::SetTheme(theme) => self.widget.borrow_mut().set_theme(theme, true),
             AppEvent::Command(command) => {
-                info!("Handling application command: {:?}", event);
+                info!("Handling application command: {:?}", event.clone());
 
                 #[allow(unreachable_patterns)]
                 match command {
@@ -201,11 +283,41 @@ impl Application for App {
                         .set_ui_scale(&self.event_loop_proxy, UI_DEFAULT_SCALE),
 
                     AppCommand::OpenSpotifyAccount => {
-                        match self.widget.borrow().open_shell_url(SPOTIFY_ACCOUNTS_URL) {
+                        match self.api.open_accounts_page() {
                             Ok(_) => {}
                             Err(err) => error!("Failed to open Spotify accounts URL: {:?}", err),
                         }
-                    }
+                    },
+
+                    AppCommand::DoSearch(value) => {
+                        let mut state_arc = Arc::clone(&self.widget.borrow().state);
+
+                        if let Some(handle) = &state_arc.lock().unwrap().search.search_task {
+                            handle.abort();
+                        }
+
+                        if !value.is_empty() {
+                            let mut api_arc = Arc::clone(&self.api);
+
+                            state_arc.lock().unwrap().search.search_results = WidgetStateSearchResults::Fetching;
+
+                            let task = tokio::task::spawn(async move {
+                                state_arc.lock().unwrap().search.search_results = WidgetStateSearchResults::Fetched(api_arc.search(
+                                    value,
+                                    None,
+                                    Some(10)
+                                )
+                                    .await
+                                );
+                            });
+
+                            let mut state_arc = Arc::clone(&self.widget.borrow().state);
+
+                            state_arc.lock().unwrap().search.search_task = Some(task.abort_handle());
+                        } else {
+                            state_arc.lock().unwrap().search.search_results = WidgetStateSearchResults::None;
+                        }
+                    },
 
                     AppCommand::Quit => args.event_loop.exit(),
                     _ => {}
@@ -256,11 +368,6 @@ impl Application for App {
                         ..Default::default()
                     });
                 },
-                WindowEvent::Focused(focused) => {
-                    if focused {
-                        self.event_loop_proxy.send_event(AppEvent::InvalidateAPIData).ok();
-                    }
-                },
                 _ => {}
             }
         }
@@ -280,7 +387,7 @@ impl imgui::UiBuilder for App {
         widget::style::push_style(&self.widget, ui, || {
             self.widget
                 .borrow_mut()
-                .paint_ui(&self.event_loop_proxy, ui, &self.api);
+                .paint_ui(&self.event_loop_proxy, ui, Arc::clone(&self.api));
         });
     }
 }

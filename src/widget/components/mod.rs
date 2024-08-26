@@ -5,13 +5,14 @@ pub mod panes;
 pub mod player;
 pub mod sidebar;
 pub mod error;
+pub mod async_image;
 
 use std::sync::{Arc, Mutex};
 
 use easy_imgui::Ui;
 use easy_imgui_window::winit::event_loop::EventLoopProxy;
 
-use crate::{api::SpotifyAPI, event::AppEvent, state::State, App, SpotifyAPILock};
+use crate::{api::SpotifyAPI, event::AppEvent, state::State, App};
 
 use super::Widget;
 
@@ -37,5 +38,5 @@ pub struct ComponentContext<'a> {
     pub widget: &'a mut Widget,
     pub event_loop: &'a EventLoopProxy<AppEvent>,
     pub ui: &'a Ui<App>,
-    pub api: &'a SpotifyAPILock,
+    pub api: Arc<SpotifyAPI>
 }
